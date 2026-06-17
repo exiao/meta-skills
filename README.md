@@ -8,7 +8,7 @@ Most agent skills are written once and never measured. They work maybe 70% of th
 
 These are [agent skills](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview): structured markdown files that teach an AI agent a specialized workflow, loaded on demand when a task matches. They work with [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Hermes Agent](https://github.com/NousResearch/hermes-agent), Codex, and other skill-aware agents.
 
-The six skills here form one loop:
+The seven skills here cover the whole lifecycle of a skill, from first draft to measured reliability:
 
 ![The skill lifecycle: create, audit, then improve with evals](.github/assets/lifecycle.png)
 
@@ -18,6 +18,7 @@ The six skills here form one loop:
 |-------|--------------|
 | **[skill-creator](skill-creator/)** | Create a new skill from scratch or improve an existing one. Enforces a test-first workflow: write 3+ pressure scenarios that fail *without* the skill before you write a line of the skill itself. Includes an eval viewer to inspect runs. |
 | **[skill-audit](skill-audit/)** | Score any skill against a structured checklist (structure, signal-to-noise, routing, gotchas). Outputs a scorecard with specific fixes. The fast first pass before you spend tokens optimizing. |
+| **[skill-tester](skill-tester/)** | Test an interactive lesson or course by *running* it, not reviewing it. An agent plays both the instructor and a calibrated student persona, capturing a full turn-by-turn transcript of every lesson, then publishes them all raw to one static page. Shows you exactly where a lesson silently breaks. |
 | **[skill-improver](skill-improver/)** | The eval-driven optimizer. Define "good output" as binary yes/no checks, then run a keep/revert loop: baseline, score, diagnose failures, propose one structured edit, and keep it only if held-out validation improves. A stronger optimizer model critiques while the target model executes, because a model can't see its own blind spots. Ships a live HTML dashboard. |
 | **[agent-improver](agent-improver/)** | Same eval-driven mutation loop, but framework-agnostic. Auto-detects the agent type (ADK, LangChain, CrewAI, AutoGen, a raw HTTP API, or a CLI) and builds the right eval harness around it. Use when the thing you're improving isn't a markdown skill but a whole agent. |
 | **[optimize-prompt](optimize-prompt/)** | The lightweight version: tune a single system prompt with one-change-at-a-time experiments. One artifact, one metric, keep what improves it, revert what doesn't. No harness required. |
