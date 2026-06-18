@@ -50,7 +50,7 @@ git clone https://github.com/exiao/meta-skills
 ## Credits
 
 - `skill-creator` is adapted from Anthropic's internal skill-creation tooling.
-- `skill-improver` builds on Karpathy's autoresearch pattern, [SkillOpt](https://arxiv.org) (Microsoft Research), and the eval-writing practices from howtoeval.com.
+- `skill-improver` builds on Karpathy's autoresearch pattern, [SkillOpt](https://arxiv.org/abs/2605.23904) (Microsoft Research), and the eval-writing practices from [howtoeval.com](https://www.howtoeval.com).
 - `mcporter` is a community CLI for the Model Context Protocol.
 
 ## License
