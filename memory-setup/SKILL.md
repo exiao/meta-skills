@@ -156,6 +156,7 @@ If your agent supports session-end hooks, configure one that:
 2. Sends them to a fast model (e.g. Haiku, GPT-4o-mini) with an extraction prompt
 3. Writes extracted entries to MEMORY.md / USER.md
 4. Writes an episode summary to `episodes/YYYY-MM-DD.md`
+5. Writes overflow queue rows to `episodes/.pending.md` when hot memory is full
 
 **Extraction prompt template:**
 
@@ -241,7 +242,7 @@ When the agent needs to remember something from the past, search in order:
 Run `memory-gc` daily (via cron, scheduled task, or manual) to keep memory files clean:
 
 1. **Decay:** Remove stale entries by category (tmp=7d, task=14d, env=30d, fact/pref=60d, rule/meta=never)
-2. **Drain:** Process `.pending.md` overflow into MEMORY.md
+2. **Drain:** Process `episodes/.pending.md` overflow into MEMORY.md
 3. **Promote:** Scan last 7 days of episodes, promote 0-3 durable facts not already in memory
 4. **Prune:** Delete memory files >90 days old, session files >180 days
 
@@ -267,12 +268,15 @@ Configure your agent's memory search to index both `memories/` and `sessions/` d
 
 ## Step 8: Overflow Handling
 
-When MEMORY.md gets too large (>100 entries), new entries should go to `.pending.md` instead. The daily GC drains pending entries after decaying old ones to make room.
+When MEMORY.md gets too large (>100 entries), new entries should go to `episodes/.pending.md` instead. The daily GC drains pending entries after decaying old ones to make room.
 
 ```
 memories/
 ├── MEMORY.md          ← Hot memory (target: ~60-100 entries)
-├── USER.md            ← User profile
+└── USER.md            ← User profile
+
+episodes/
+├── YYYY-MM-DD.md      ← Daily session summaries
 ├── .pending.md        ← Overflow queue (drained by memory-gc)
 └── .gc.log            ← GC audit log
 ```
@@ -302,11 +306,11 @@ $WORKSPACE/
 ├── AGENTS.md / CLAUDE.md   ← Operating instructions
 ├── memories/
 │   ├── MEMORY.md           ← Hot memory (loaded every session)
-│   ├── USER.md             ← User profile (loaded every session)
+│   └── USER.md             ← User profile (loaded every session)
+├── episodes/
+│   ├── YYYY-MM-DD.md       ← Daily session summaries
 │   ├── .pending.md         ← Overflow queue
 │   └── .gc.log             ← GC audit log
-├── episodes/
-│   └── YYYY-MM-DD.md       ← Daily session summaries
 ├── sessions/
 │   └── *.jsonl             ← Raw transcripts (optional)
 ├── plans/

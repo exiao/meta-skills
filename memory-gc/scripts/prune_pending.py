@@ -21,16 +21,20 @@ from pathlib import Path
 
 PENDING = Path.home() / ".hermes/episodes/.pending.md"
 
+if not PENDING.exists():
+    print(f"Pending file {PENDING} does not exist; nothing to prune.")
+    raise SystemExit(0)
+
 lines = [l.strip() for l in PENDING.read_text().splitlines() if l.strip()]
 print(f"Input: {len(lines)} entries")
 
 # Parse entries
 entries = []
 for line in lines:
-    m = re.match(r'^(memory|user)\t\[(\d{4}-\d{2}-\d{2})\]\[([^\]]+)\]\s*(.+)$', line)
+    m = re.match(r'^(memory|user)\t\[(\d{4}-\d{2}-\d{2})\]\[([^\]]+)\]\s*(.+)$', line, re.IGNORECASE)
     if m:
         entries.append({
-            'target': m.group(1), 'date': m.group(2),
+            'target': m.group(1).lower(), 'date': m.group(2),
             'cat': m.group(3), 'content': m.group(4), 'raw': line
         })
     else:
@@ -218,16 +222,20 @@ SUBTOPIC_WORDS = [
 ]
 
 
+KNOWN_SPRAWL_SUFFIXES = {'agent', 'cli', 'site', 'wiki'}
+
+
 def _ns_root(cat):
     """Reduce a proj: category to its namespace root.
 
-    proj:foo-agent -> foo ; proj:foo/bar -> foo ; proj:foo-wiki -> foo
+    proj:foo-agent -> foo ; proj:foo/bar -> foo ; proj:foo-wiki -> foo.
+    Hyphenated project names without a known sprawl suffix are preserved.
     """
     ns = cat.split(':', 1)[1] if ':' in cat else cat
     ns = ns.split('/', 1)[0]
-    parts = ns.split('-')
-    if len(parts) > 1:
-        ns = parts[0]
+    root, sep, suffix = ns.rpartition('-')
+    if sep and suffix in KNOWN_SPRAWL_SUFFIXES:
+        ns = root
     return ns
 
 

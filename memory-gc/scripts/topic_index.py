@@ -74,6 +74,7 @@ def _size_label(nbytes: int) -> str:
 
 def rebuild_index(mem: Path) -> int:
     """Rewrite INDEX.md from disk, preserving known descriptions. Returns row count."""
+    mem.mkdir(parents=True, exist_ok=True)
     idx = mem / "INDEX.md"
     existing = parse_existing_descriptions(idx)
     rows = []
@@ -90,11 +91,12 @@ def archive_candidates(mem: Path, stale_days: int = STALE_DAYS) -> list[str]:
     """Topic files that are stale AND unreferenced. Pure query, no side effects."""
     memory_path = mem / "MEMORY.md"
     memory_text = memory_path.read_text(encoding="utf-8") if memory_path.exists() else ""
+    indexed = set(parse_existing_descriptions(mem / "INDEX.md"))
     now = time.time()
     out = []
     for name in topic_files(mem):
         p = mem / name
-        referenced = f"Topic file: {name}" in memory_text
+        referenced = f"Topic file: {name}" in memory_text or name in indexed
         stale = (now - p.stat().st_mtime) > stale_days * 86400
         if stale and not referenced:
             out.append(name)
@@ -106,7 +108,7 @@ def apply_archive(mem: Path, names: list[str]) -> list[str]:
     if not names:
         return []
     arch = mem / "archive"
-    arch.mkdir(exist_ok=True)
+    arch.mkdir(parents=True, exist_ok=True)
     moved = []
     for name in names:
         src = mem / name

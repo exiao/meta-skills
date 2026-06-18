@@ -35,8 +35,9 @@ keyword. Run:
 ls ~/.hermes/plans/ ~/.hermes/plans/archive/ | grep -i '<keyword>'
 grep -il '<phrase>' ~/.hermes/plans/*.md ~/.hermes/plans/archive/*.md
 ```
-Then read the matching file and report its path + whether it's archived (shipped)
-or active.
+Then read the matching file and report its path + whether it's archived or active.
+Do not equate `plans/archive/` with shipped work; shipping status requires checking
+the relevant PR, commit, or product artifact surface.
 
 Topic files hold big durable context (architecture, runbooks, research,
 theses). Episodes answer "did this happen, and when". Raw sessions answer

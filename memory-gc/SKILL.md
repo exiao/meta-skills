@@ -47,7 +47,14 @@ When using FilePatch:
   This avoids orphaned separators.
 - If the entry is the LAST in the file (no trailing `§`), remove just the entry
   text and the preceding `\n§\n` from the entry above it.
-- Clean up resulting blank lines with `sed -i '' '/^$/d'` afterward.
+- Clean up resulting blank lines with portable Python afterward:
+```bash
+python3 - <<'PY'
+from pathlib import Path
+p = Path.home() / '.hermes/memories/MEMORY.md'
+p.write_text('\n'.join(l for l in p.read_text().splitlines() if l.strip()) + '\n')
+PY
+```
 - The same safety rails apply: never touch `[rule]` or `[meta]` entries.
 
 **Pitfall — multibyte characters:** MEMORY.md may contain unicode (arrows,
@@ -117,7 +124,7 @@ into smaller patches so one stale line does not cancel the whole pass.
 |------------------------|-----------------------------------------------------|
 | `fact`, `pref`         | review at 60d: still true? keep or `remove`         |
 | `env`                  | review at 30d: still accurate? keep or `remove`     |
-| `proj:<path>`          | review at 21d; `remove` if path no longer exists    |
+| `proj:<path-or-namespace>` | review at 21d; `remove` only when an explicit filesystem path no longer exists |
 | `rel:<name>`           | review at 90d; `remove` if name unmentioned lately  |
 | `task`                 | review at 14d; `remove` if completed or abandoned   |
 | `tmp`                  | hard `remove` at 7d — no review                     |
@@ -205,7 +212,11 @@ or run a broad USER preference consolidation.
 ### 2. Apply hard drops (no review, no judgment)
 
 - `[tmp]` entries older than 7 days → `memory` tool, `action: remove`, `old_text` = shortest unique substring.
-- `[proj:<path>]` entries where the path does not exist on disk → remove.
+- `[proj:<path-or-namespace>]` entries where the tag is explicitly a filesystem path
+  (absolute, `./`, `../`, `~`, or an intentional path with separators) and that path
+  does not exist on disk → archive + remove. Namespace-only project tags such as
+  `proj:<name>-wiki`, `proj:<name>-agent`, or `proj:<name>` are not path checks;
+  review them by content and keep/relocate if still useful.
 
 ### 3. Apply review rules
 
@@ -232,10 +243,25 @@ MEMORY.md capacity without losing information.
 
 ### 4. Triage `.pending.md` (prune BEFORE draining)
 
-First, run the deterministic dedup script to remove obvious duplicates:
+First, run the deterministic dedup script to remove obvious duplicates. If the
+runtime has not installed `~/.hermes/scripts/dedup-pending.py`, use the inline
+fallback below rather than failing the GC run:
 
 ```bash
-python3 ~/.hermes/scripts/dedup-pending.py
+if [ -x ~/.hermes/scripts/dedup-pending.py ]; then
+  python3 ~/.hermes/scripts/dedup-pending.py
+else
+  python3 - <<'PY'
+from pathlib import Path
+p = Path.home() / '.hermes/episodes/.pending.md'
+if p.exists():
+    seen = set(); out = []
+    for line in p.read_text().splitlines():
+        if line and line not in seen:
+            seen.add(line); out.append(line)
+    p.write_text('\n'.join(out) + ('\n' if out else ''))
+PY
+fi
 ```
 
 Then check what remains:
@@ -661,12 +687,14 @@ archive and remove redundant `[pref]`/`[fact]` entries whose detail now lives in
 topic files; that is safer than leaving hot memory above target. Count
 shortening as `consolidated`, not `removed`.
 
-**d. Archive stale, unreferenced topic files.** A file is a candidate ONLY if
-BOTH are true: (1) no `[meta]` pointer references it anywhere in MEMORY.md,
-AND (2) it has not been modified in > 120 days. Candidates are MOVED to
-`memories/archive/` (never deleted, never clobbering an earlier archived
-copy). Referenced files are kept regardless of age. The same tested script
-handles this:
+**d. Archive stale, unreferenced topic files.** `memories/INDEX.md` is the
+authoritative topic registry; MEMORY topic pointers are only hot-route hints.
+A file is a candidate ONLY if all are true: (1) no `[meta]` pointer references
+it anywhere in MEMORY.md, (2) it is absent from INDEX.md, and (3) it has not
+been modified in > 120 days. Candidates are MOVED to `memories/archive/`
+(never deleted, never clobbering an earlier archived copy). Files referenced
+by either MEMORY hot pointers or INDEX are kept regardless of age. The same
+tested script handles this:
 
 ```bash
 # 1. Dry run — print candidates, sanity-check them:
@@ -681,7 +709,7 @@ keeping. After `--apply`, remove any now-orphan `[meta]` pointer for the
 archived files via the `memory` tool (the script prints a reminder).
 
 Tests for this script live in `scripts/test_topic_index.py`
-(`python3 scripts/test_topic_index.py` — 29 cases, all in a tempdir).
+(`python3 scripts/test_topic_index.py` — all in a tempdir).
 
 ### 10. Log and report
 
@@ -730,13 +758,15 @@ Your final response:
 - `references/medium-pending-relocation.md` — Pattern for 100-150 pending survivors:
   archive every survivor, relocate only class-level facts into topic files, create
   new topic files sparingly, fill INDEX descriptions, and discard stale task/PR/personal state.
-- `scripts/prune_pending.py` — Two-pass semantic prune script. Run after
-  `dedup-pending.py`. Handles project namespace sprawl (the primary duplication
-  source). Expected 84% reduction on typical 100-200 line pending files.
+- `scripts/prune_pending.py` — Two-pass semantic prune script. Run after the
+  deterministic dedup step (external script when present, inline fallback otherwise).
+  Handles project namespace sprawl (the primary duplication source). Expected 84%
+  reduction on typical 100-200 line pending files.
 
 ## Dependencies
 
-- `~/.hermes/scripts/dedup-pending.py` — deterministic dedup script run in step 4
+- `~/.hermes/scripts/dedup-pending.py` — optional deterministic dedup script run
+  in step 4 when present; otherwise use the inline fallback there.
 - `~/.hermes/plugins/memory-session-end/` — upstream producer of pending entries
   (fixed May 2026 to inject existing memory context and cap at 0-3 entries)
 

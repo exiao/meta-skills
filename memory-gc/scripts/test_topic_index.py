@@ -123,15 +123,35 @@ def run():
     check("apply_archive([]) is a noop", ti.apply_archive(mem, []) == [])
     check("rebuild on empty dir writes 0 rows", ti.rebuild_index(mem) == 0)
 
-    print("\n[8] CLI entrypoint works end to end")
+    print("\n[8] missing parent directories are created safely")
+    missing_mem = Path(tempfile.mkdtemp(prefix="ti-test-missing-")) / "missing" / "memories"
+    check("rebuild creates missing mem dir", ti.rebuild_index(missing_mem) == 0)
+    check("INDEX exists in created mem dir", (missing_mem / "INDEX.md").exists())
+    missing_archive_mem = Path(tempfile.mkdtemp(prefix="ti-test-archive-")) / "missing" / "memories"
+    check("apply_archive tolerates missing parent mem dir", ti.apply_archive(missing_archive_mem, ["ghost.md"]) == [])
+    check("archive dir created with parents", (missing_archive_mem / "archive").exists())
+
+    print("\n[9] INDEX-listed topic files are retained without hot pointers")
+    mem = make_sandbox()
+    old = time.time() - 200 * 86400
+    write(mem, "indexed-only.md", mtime=old)
+    (mem / "INDEX.md").write_text(
+        ti.INDEX_HEADER + "| indexed-only.md | durable topic | 2026-01-01 | 1KB |\n",
+        encoding="utf-8")
+    check("stale INDEX-listed file is not an archive candidate",
+          ti.archive_candidates(mem) == [])
+
+    print("\n[10] CLI entrypoint works end to end")
     mem = make_sandbox()
     write(mem, "cli.md", mtime=time.time() - 200 * 86400)
     rc = ti.main(["rebuild-index", "--mem-dir", str(mem)])
     check("rebuild-index returns 0", rc == 0)
     check("cli.md indexed", "| cli.md |" in (mem / "INDEX.md").read_text(encoding="utf-8"))
+    write(mem, "orphan.md", mtime=time.time() - 200 * 86400)
     rc = ti.main(["archive-candidates", "--mem-dir", str(mem), "--apply"])
     check("archive --apply returns 0", rc == 0)
-    check("cli.md archived via CLI", (mem / "archive" / "cli.md").exists())
+    check("indexed cli.md retained via CLI", (mem / "cli.md").exists())
+    check("unindexed orphan.md archived via CLI", (mem / "archive" / "orphan.md").exists())
 
     print(f"\n=== {PASS} passed, {FAIL} failed ===")
     return FAIL == 0
