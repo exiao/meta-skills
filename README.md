@@ -8,7 +8,7 @@ Most agent skills are written once and never measured. They work maybe 70% of th
 
 These are [agent skills](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview): structured markdown files that teach an AI agent a specialized workflow, loaded on demand when a task matches. They work with [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Hermes Agent](https://github.com/NousResearch/hermes-agent), Codex, and other skill-aware agents.
 
-The seven skills here cover the whole lifecycle of a skill, from first draft to measured reliability:
+The seven core skills cover the whole lifecycle of a skill, from first draft to measured reliability (plus a memory toolkit below so your agent remembers across runs):
 
 ![The skill lifecycle: create, audit, then improve with evals](.github/assets/lifecycle.png)
 
@@ -23,6 +23,16 @@ The seven skills here cover the whole lifecycle of a skill, from first draft to 
 | **[agent-improver](agent-improver/)** | Same eval-driven mutation loop, but framework-agnostic. Auto-detects the agent type (ADK, LangChain, CrewAI, AutoGen, a raw HTTP API, or a CLI) and builds the right eval harness around it. Use when the thing you're improving isn't a markdown skill but a whole agent. |
 | **[optimize-prompt](optimize-prompt/)** | The lightweight version: tune a single system prompt with one-change-at-a-time experiments. One artifact, one metric, keep what improves it, revert what doesn't. No harness required. |
 | **[mcporter](mcporter/)** | List, configure, authenticate, and call [MCP](https://modelcontextprotocol.io) servers and tools directly (HTTP or stdio). The plumbing for giving a skill real tools to call. |
+
+## Memory
+
+A skill is only as good as what the agent remembers between runs. These three give any skill-aware agent a persistent, self-maintaining memory built on plain dated markdown files, no vector database required.
+
+| Skill | What it does |
+|-------|--------------|
+| **[memory-setup](memory-setup/)** | Stand up persistent memory for any agent from scratch: the workspace files, the `[YYYY-MM-DD][tag]` entry format, session-end extraction, daily garbage collection, multi-tier recall, and optional vector search. Agent-agnostic. |
+| **[memory-gc](memory-gc/)** | The nightly maintenance pass. Decays entries by age, drains the spillover queue, collapses near-duplicates and project-namespace sprawl, relocates project facts to topic files, and holds hot memory under a size target. Ships a deterministic pre-prune script. |
+| **[recall](recall/)** | Answer "when did we…?" questions by walking storage cheapest-first (hot memory, then topic files, then dated episodes, then raw transcripts) and stopping as soon as more searching stops improving the answer. Includes an anti-hallucination pattern so the agent never invents history. |
 
 ## Why eval-driven
 
