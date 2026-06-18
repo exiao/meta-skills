@@ -284,7 +284,7 @@ from the script even with 100+ duplicate entries.
 python3 ~/.hermes/skills/memory/memory-gc/scripts/prune_pending.py
 ```
 
-Pass 1 hard-drops all `[task]`, `[tmp]`, `[env]` entries and rule minutiae,
+Pass 1 hard-drops all `[task]` and `[tmp]` entries plus rule minutiae,
 then deduplicates within each category by topic key (keeps longest per topic).
 Pass 2 collapses cross-category namespace sprawl (the #1 duplication source:
 a single project may generate entries under `proj:<name>`,
@@ -350,7 +350,7 @@ every surviving `[proj:*]` entry maps to an existing dedicated memory file
 AND surviving `[rule]`/`[fact]` entries are project-specific code rules (not
 general agent rules), relocate architectural facts to dedicated files and
 discard everything else. In practice this is the common case: the prune script
-drops tasks/tmp/env, and what remains is project-specific detail that belongs
+drops tasks/tmp, and what remains is project-specific detail that belongs
 in `<project-a>.md`, `<project-b>.md`, `<service>.md`, etc. Batch
 related facts into a single new subsection per file (e.g.,
 "### Code Rules (May 2026)") rather than appending one entry at a time. After
@@ -622,8 +622,27 @@ Topic files (`memories/*.md` excluding core MEMORY/USER/MEM_ARCH/INDEX and
 them and queues a `[meta] Topic file: X.md = ...` pointer into `.pending.md`
 (drained in step 4). GC keeps the registry and pointers consistent.
 
-**a. Rebuild `INDEX.md`** from the current topic files. The logic lives in a
-tested script (`scripts/topic_index.py`), not inline here:
+**a. Archive stale generated-inventory topic files before the routine rebuild.**
+Run the candidate query before refreshing `INDEX.md` so a just-generated inventory
+row cannot protect every stale file. `INDEX.md` remains the authoritative recall
+registry, but only rows with a human-curated description (not `(no description)`)
+count as archival references.
+
+```bash
+# 1. Dry run — print candidates, sanity-check them:
+python3 ~/.hermes/skills/memory/memory-gc/scripts/topic_index.py archive-candidates
+
+# 2. If the list looks right, apply (moves files + rebuilds INDEX):
+python3 ~/.hermes/skills/memory/memory-gc/scripts/topic_index.py archive-candidates --apply
+```
+
+Always run the dry run first and eyeball the list — err on the side of
+keeping. After `--apply`, remove any now-orphan `[meta]` pointer for the
+archived files via the `memory` tool (the script prints a reminder).
+
+**b. Rebuild `INDEX.md`** from the current topic files after archival and after
+any topic-file changes. The logic lives in a tested script (`scripts/topic_index.py`),
+not inline here:
 
 ```bash
 python3 ~/.hermes/skills/memory/memory-gc/scripts/topic_index.py rebuild-index
@@ -633,7 +652,7 @@ It regenerates the registry from disk, preserves existing one-line
 descriptions, and excludes core files (MEMORY/USER/MEM_ARCH/INDEX), `*.bak`,
 and dotfiles. Run it after any topic-file change (drain, relocation, archive).
 
-**b. Prune stale published-artifact URLs.** If `~/.hermes/memories/artifacts.md`
+**c. Prune stale published-artifact URLs.** If `~/.hermes/memories/artifacts.md`
 exists, validate rows in its registry table during the topic-file maintenance pass.
 For each row with an `http://` or `https://` URL, do a cheap HEAD request first and
 fallback to GET only when HEAD is unsupported. Keep rows that return 2xx/3xx or
@@ -642,7 +661,7 @@ that fail due to transient network/auth errors. Move rows that clearly return
 instead of deleting them outright. This keeps the auto-populated artifact registry
 useful without losing the historical trail.
 
-**c. Reconcile pointers in MEMORY.md.** `INDEX.md` is the authoritative registry;
+**d. Reconcile pointers in MEMORY.md.** `INDEX.md` is the authoritative registry;
 MEMORY.md pointers are only hot-route hints for high-value or recently touched
 topic files. Do **not** add pointers for every topic file when the topic file
 count is large, because this can blow the 70% hot-memory target. Instead:
@@ -686,27 +705,6 @@ is already in a topic file. If shortening protected entries is not enough,
 archive and remove redundant `[pref]`/`[fact]` entries whose detail now lives in
 topic files; that is safer than leaving hot memory above target. Count
 shortening as `consolidated`, not `removed`.
-
-**d. Archive stale, unreferenced topic files.** `memories/INDEX.md` is the
-authoritative topic registry; MEMORY topic pointers are only hot-route hints.
-A file is a candidate ONLY if all are true: (1) no `[meta]` pointer references
-it anywhere in MEMORY.md, (2) it is absent from INDEX.md, and (3) it has not
-been modified in > 120 days. Candidates are MOVED to `memories/archive/`
-(never deleted, never clobbering an earlier archived copy). Files referenced
-by either MEMORY hot pointers or INDEX are kept regardless of age. The same
-tested script handles this:
-
-```bash
-# 1. Dry run — print candidates, sanity-check them:
-python3 ~/.hermes/skills/memory/memory-gc/scripts/topic_index.py archive-candidates
-
-# 2. If the list looks right, apply (moves files + rebuilds INDEX):
-python3 ~/.hermes/skills/memory/memory-gc/scripts/topic_index.py archive-candidates --apply
-```
-
-Always run the dry run first and eyeball the list — err on the side of
-keeping. After `--apply`, remove any now-orphan `[meta]` pointer for the
-archived files via the `memory` tool (the script prints a reminder).
 
 Tests for this script live in `scripts/test_topic_index.py`
 (`python3 scripts/test_topic_index.py` — all in a tempdir).

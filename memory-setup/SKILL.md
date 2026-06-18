@@ -42,7 +42,13 @@ AI agents have no memory between sessions unless you write things to disk. Memor
 
 ## Step 1: Create the Workspace
 
-Pick a home directory for your agent's memory. Common conventions:
+Use the same canonical workspace root that `memory-gc` and `recall` operate on:
+`~/.hermes`. Agents that use a different config directory should still read and
+write this memory workspace (or update every `memory-gc`/`recall` command to the
+same alternate root). Do not initialize this toolkit under `~/.agent` while daily
+GC still points at `~/.hermes`, or GC will prune the wrong tree.
+
+Common agent config locations you may need to point at this workspace:
 
 | Agent | Default Location |
 |-------|-----------------|
@@ -50,10 +56,10 @@ Pick a home directory for your agent's memory. Common conventions:
 | OpenCode | `~/.opencode/` |
 | Hermes Agent | `~/.hermes/` |
 | OpenClaw | `~/.openclaw/workspace/` |
-| Generic | `~/.agent/` |
+| Generic | point your agent at `~/.hermes/` |
 
 ```bash
-WORKSPACE="$HOME/.agent"  # adjust for your agent
+WORKSPACE="$HOME/.hermes"  # canonical root used by memory-gc and recall
 mkdir -p "$WORKSPACE/memories"
 mkdir -p "$WORKSPACE/episodes"
 mkdir -p "$WORKSPACE/plans"
@@ -166,7 +172,7 @@ Review this conversation. Extract durable memories worth keeping.
 Return JSON:
 {
   "entries": [
-    {"cat": "fact|pref|env|task|tmp|rule", "target": "MEMORY|USER", "content": "..."}
+    {"cat": "fact|pref|env|proj:<path-or-namespace>|rel:<name>|task|tmp|rule|meta", "target": "MEMORY|USER", "content": "..."}
   ],
   "episode": {
     "summary": "One paragraph summary of the session",
@@ -178,7 +184,7 @@ Rules:
 - Only extract what's worth remembering across sessions
 - Skip small talk, debugging noise, routine commands
 - Prefer specific facts over vague summaries
-- Use the correct category for each entry
+- Use the correct category for each entry: project context goes in `proj:<path-or-namespace>`; person/user facts go in `rel:<name>` when they are about another person, or `USER` when they describe the user.
 - If nothing worth saving, return empty arrays
 ```
 
@@ -210,7 +216,7 @@ Episodes are daily session summaries that form the middle tier of recall. Each d
 
 **Summary:** Set up CI pipeline for the new API. Decided on GitHub Actions over CircleCI. Fixed a flaky test in the auth module.
 
-**Tags:** devops, ci, testing, auth
+tags: devops, ci, testing, auth
 
 ---
 
@@ -218,7 +224,7 @@ Episodes are daily session summaries that form the middle tier of recall. Each d
 
 **Summary:** Reviewed PR #42, discussed pricing strategy for the Pro tier. User prefers value-based pricing over cost-plus.
 
-**Tags:** code-review, pricing, product
+tags: code-review, pricing, product
 ```
 
 ## Step 5: Multi-Tier Recall

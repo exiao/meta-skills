@@ -43,7 +43,7 @@ for line in lines:
 
 # -- Pass 1: Category-based hard drops + intra-category topic dedup --
 
-HARD_DROP_CATS = {'task', 'tmp', 'env'}
+HARD_DROP_CATS = {'task', 'tmp'}
 
 # Fact patterns that are transient operational data, not durable memory.
 # These get re-extracted every session but have no lasting architectural value.
@@ -210,7 +210,9 @@ print(f"Pass 1 topic dedup: {len(after_pass1)} entries")
 # Collapses project namespace sprawl (the #1 duplication source) without
 # hardcoding any specific project name. Entries under proj:<root>,
 # proj:<root>-<suffix>, and proj:<root>/<subdir> all collapse to one group,
-# sub-keyed by a detected topic word so distinct facts still survive.
+# sub-keyed by a detected topic word so distinct project facts still survive.
+# Non-project facts keep content-derived keys; generic words like "auth" must
+# not collapse unrelated durable facts before manual triage.
 
 # Common sub-topic words seen across projects. Tune for your own workspace.
 SUBTOPIC_WORDS = [
@@ -251,9 +253,6 @@ def mega_topic(e):
                 return f'{root}:{w.replace(" ", "-")}'
         return f'{root}:other:{c[:30]}'
 
-    for w in SUBTOPIC_WORDS:
-        if w in c:
-            return f'{cat}:{w.replace(" ", "-")}'
     return f'unique:{cat}:{c[:30]}'
 
 

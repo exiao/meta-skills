@@ -131,15 +131,21 @@ def run():
     check("apply_archive tolerates missing parent mem dir", ti.apply_archive(missing_archive_mem, ["ghost.md"]) == [])
     check("archive dir created with parents", (missing_archive_mem / "archive").exists())
 
-    print("\n[9] INDEX-listed topic files are retained without hot pointers")
+    print("\n[9] only curated INDEX rows protect stale files")
     mem = make_sandbox()
     old = time.time() - 200 * 86400
     write(mem, "indexed-only.md", mtime=old)
     (mem / "INDEX.md").write_text(
         ti.INDEX_HEADER + "| indexed-only.md | durable topic | 2026-01-01 | 1KB |\n",
         encoding="utf-8")
-    check("stale INDEX-listed file is not an archive candidate",
+    check("stale curated INDEX-listed file is not an archive candidate",
           ti.archive_candidates(mem) == [])
+
+    mem = make_sandbox()
+    write(mem, "generated-only.md", mtime=old)
+    ti.rebuild_index(mem)
+    check("stale generated INDEX inventory remains an archive candidate",
+          ti.archive_candidates(mem) == ["generated-only.md"])
 
     print("\n[10] CLI entrypoint works end to end")
     mem = make_sandbox()
@@ -150,7 +156,7 @@ def run():
     write(mem, "orphan.md", mtime=time.time() - 200 * 86400)
     rc = ti.main(["archive-candidates", "--mem-dir", str(mem), "--apply"])
     check("archive --apply returns 0", rc == 0)
-    check("indexed cli.md retained via CLI", (mem / "cli.md").exists())
+    check("generated stale cli.md archived via CLI", (mem / "archive" / "cli.md").exists())
     check("unindexed orphan.md archived via CLI", (mem / "archive" / "orphan.md").exists())
 
     print(f"\n=== {PASS} passed, {FAIL} failed ===")

@@ -5,9 +5,10 @@ Two responsibilities, both safe to run unattended:
 
 1. ``rebuild-index`` — regenerate ``memories/INDEX.md`` from the topic files
    actually on disk, preserving existing one-line descriptions.
-2. ``archive-candidates`` — list topic files that are BOTH stale (> N days
-   since modified) AND unreferenced (no ``Topic file: <name>`` pointer in
-   MEMORY.md). With ``--apply`` it MOVES them into ``memories/archive/``.
+2. ``archive-candidates`` — list topic files that are stale (> N days since
+   modified) and unreferenced by MEMORY.md hot pointers or human-curated INDEX
+   rows. Generated ``(no description)`` INDEX inventory rows do not protect a
+   stale file. With ``--apply`` it MOVES candidates into ``memories/archive/``.
    It never deletes and never touches a referenced file.
 
 The logic lives here (not as inline heredocs in SKILL.md) so it is testable and
@@ -68,6 +69,21 @@ def parse_existing_descriptions(idx: Path) -> dict[str, str]:
     return out
 
 
+def curated_index_references(idx: Path) -> set[str]:
+    """Topic files with human-curated INDEX descriptions.
+
+    ``rebuild_index`` inventories every topic file on disk and assigns new files
+    ``(no description)``. Those generated inventory rows should not, by
+    themselves, protect stale files from archival; otherwise a rebuild right
+    before ``archive-candidates`` makes every current file look referenced.
+    """
+    return {
+        name
+        for name, desc in parse_existing_descriptions(idx).items()
+        if desc and desc != "(no description)"
+    }
+
+
 def _size_label(nbytes: int) -> str:
     return f"{nbytes // 1024}KB" if nbytes >= 1024 else f"{nbytes}B"
 
@@ -91,7 +107,7 @@ def archive_candidates(mem: Path, stale_days: int = STALE_DAYS) -> list[str]:
     """Topic files that are stale AND unreferenced. Pure query, no side effects."""
     memory_path = mem / "MEMORY.md"
     memory_text = memory_path.read_text(encoding="utf-8") if memory_path.exists() else ""
-    indexed = set(parse_existing_descriptions(mem / "INDEX.md"))
+    indexed = curated_index_references(mem / "INDEX.md")
     now = time.time()
     out = []
     for name in topic_files(mem):

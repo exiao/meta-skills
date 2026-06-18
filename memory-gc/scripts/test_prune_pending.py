@@ -86,6 +86,33 @@ def run():
         # Known sprawl suffixes still collapse, so only one alpha agent/wiki survivor remains.
         check("known sprawl suffixes still collapse", ("proj:alpha-agent" in out) != ("proj:alpha-wiki" in out))
 
+    print("\n[4] durable env facts survive pending prune")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        pending = make_pending(home, "\n".join([
+            "memory\t[2026-06-01][env] production API host moved to us-east-2",
+            "memory\t[2026-06-01][fact] keep this stable architecture fact",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("env prune run returns 0", proc.returncode == 0)
+        check("durable env fact survives", "production API host moved" in out)
+
+    print("\n[5] non-project facts with shared topic words stay distinct")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        pending = make_pending(home, "\n".join([
+            "memory\t[2026-06-01][fact] auth token rotation moved to weekly automation",
+            "memory\t[2026-06-01][fact] auth bearer-cookie behavior changed for web clients",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("non-project shared topic run returns 0", proc.returncode == 0)
+        check("auth token fact survives", "auth token rotation" in out)
+        check("bearer-cookie fact survives", "bearer-cookie behavior" in out)
+
     print(f"\n=== {PASS} passed, {FAIL} failed ===")
     return FAIL == 0
 

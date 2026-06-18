@@ -32,8 +32,8 @@ CLI fix while the plan the user wants is a separate desktop-page UI rework with
 a similar name. Match the user's actual subject (page vs CLI), not just the
 keyword. Run:
 ```bash
-ls ~/.hermes/plans/ ~/.hermes/plans/archive/ | grep -i '<keyword>'
-grep -il '<phrase>' ~/.hermes/plans/*.md ~/.hermes/plans/archive/*.md
+ls ~/.hermes/plans/ ~/.hermes/plans/archive/ | grep -Fi -- '<keyword>'
+grep -Fil -- '<phrase>' ~/.hermes/plans/*.md ~/.hermes/plans/archive/*.md
 ```
 Then read the matching file and report its path + whether it's archived or active.
 Do not equate `plans/archive/` with shipped work; shipping status requires checking
@@ -86,7 +86,7 @@ grep -l "^tags:.*\b<theme>\b" ~/.hermes/episodes/*.md
 If L2 misses (query not in canonical themes) or returns nothing, grep
 anywhere in episode files:
 ```bash
-grep -il "<query>" ~/.hermes/episodes/*.md
+grep -Fil -- "<query>" ~/.hermes/episodes/*.md
 ```
 
 ### L3 — cat one episode file
@@ -100,7 +100,7 @@ Each session block has `summary:` and `tags:`. This is usually enough.
 When an episode summary dropped the detail you need (exact error string,
 code snippet, command used), grep the raw sessions:
 ```bash
-grep -l "<query>" ~/.hermes/sessions/*.jsonl
+grep -Fl -- "<query>" ~/.hermes/sessions/*.jsonl
 ```
 Expensive — only do this if episodes are too coarse.
 
@@ -117,7 +117,7 @@ When you need the exact text of something from a past session and episode summar
 
 ```bash
 # 1. Find which session file contains the distinctive string
-grep -l "DISTINCTIVE_PHRASE" ~/.hermes/sessions/*.jsonl
+grep -Fl -- "DISTINCTIVE_PHRASE" ~/.hermes/sessions/*.jsonl
 
 # 2. Extract the content field containing it
 python3 -c "
