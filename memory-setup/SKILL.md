@@ -146,7 +146,7 @@ Tell the agent HOW to use memory. Add a memory section to your existing context 
 - **Entry format:** `[YYYY-MM-DD][cat] content`
   Categories: fact, pref, env, proj:<path>, rel:<name>, task, tmp, rule, meta
 - **[rule] entries** are hard behavioral constraints for the session.
-- **Past-session queries** → use recall skill (hot → episodes → sessions).
+- **Past-session queries** → use recall skill (hot → topic files via `memories/INDEX.md` → episodes → sessions).
   Never fabricate history.
 - **Never fabricate a creation date.** If unsure, use today's.
 ```
