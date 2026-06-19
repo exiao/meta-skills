@@ -254,6 +254,20 @@ def run():
         )
         check("repo-b path fact survives", "proj:/repo-b" in out)
 
+    print("\n[15] absolute project paths under the same parent stay distinct")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        pending = make_pending(home, "\n".join([
+            "memory\t[2026-06-01][proj:/Users/example/repo-a] auth uses OAuth SSO",
+            "memory\t[2026-06-01][proj:/Users/example/repo-b] auth uses OAuth SSO",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("same-parent absolute path run returns 0", proc.returncode == 0)
+        check("repo-a under parent survives", "proj:/Users/example/repo-a" in out)
+        check("repo-b under parent survives", "proj:/Users/example/repo-b" in out)
+
     print(f"\n=== {PASS} passed, {FAIL} failed ===")
     return FAIL == 0
 

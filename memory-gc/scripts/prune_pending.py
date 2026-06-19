@@ -276,27 +276,30 @@ SUBTOPIC_WORDS = [
 KNOWN_SPRAWL_SUFFIXES = {'agent', 'cli', 'site', 'wiki'}
 
 
+def _strip_sprawl_suffix(name):
+    root, sep, suffix = name.rpartition('-')
+    if sep and suffix in KNOWN_SPRAWL_SUFFIXES:
+        return root
+    return name
+
+
 def _ns_root(cat):
     """Reduce a proj: category to its namespace root.
 
     proj:foo-agent -> foo ; proj:foo/bar -> foo ; proj:foo-wiki -> foo.
-    proj:/repo-a/subdir -> /repo-a so explicit filesystem roots stay distinct.
+    proj:/Users/me/repo-a -> /Users/me/repo-a so explicit filesystem roots stay distinct.
     Hyphenated project names without a known sprawl suffix are preserved.
     """
     ns = cat.split(':', 1)[1] if ':' in cat else cat
     if ns.startswith('/'):
-        first_part = next((part for part in ns.split('/') if part), '')
-        if not first_part:
+        path = '/' + '/'.join(part for part in ns.split('/') if part)
+        if path == '/':
             return '/'
-        root, sep, suffix = first_part.rpartition('-')
-        if sep and suffix in KNOWN_SPRAWL_SUFFIXES:
-            first_part = root
-        return f'/{first_part}'
+        parent, _, leaf = path.rpartition('/')
+        leaf = _strip_sprawl_suffix(leaf)
+        return f'{parent}/{leaf}' if parent else f'/{leaf}'
     ns = ns.split('/', 1)[0]
-    root, sep, suffix = ns.rpartition('-')
-    if sep and suffix in KNOWN_SPRAWL_SUFFIXES:
-        ns = root
-    return ns
+    return _strip_sprawl_suffix(ns)
 
 
 def mega_topic(e):
