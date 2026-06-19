@@ -236,6 +236,38 @@ def run():
         check("semantic duplicate archived", "duplicate operational fact" in log)
         check("hard-dropped tmp archived", "expired scratch note should be recoverable" in log)
 
+    print("\n[14] absolute project paths keep distinct roots and collapse sprawl suffixes")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        pending = make_pending(home, "\n".join([
+            "memory\t[2026-06-01][proj:/repo-a-agent] auth uses OAuth SSO",
+            "memory\t[2026-06-01][proj:/repo-a-wiki] auth uses OAuth SSO",
+            "memory\t[2026-06-01][proj:/repo-b] auth uses OAuth SSO",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("absolute project path run returns 0", proc.returncode == 0)
+        check(
+            "repo-a agent/wiki sprawl collapses to one survivor",
+            ("proj:/repo-a-agent" in out) != ("proj:/repo-a-wiki" in out),
+        )
+        check("repo-b path fact survives", "proj:/repo-b" in out)
+
+    print("\n[15] absolute project paths under the same parent stay distinct")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        pending = make_pending(home, "\n".join([
+            "memory\t[2026-06-01][proj:/Users/example/repo-a] auth uses OAuth SSO",
+            "memory\t[2026-06-01][proj:/Users/example/repo-b] auth uses OAuth SSO",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("same-parent absolute path run returns 0", proc.returncode == 0)
+        check("repo-a under parent survives", "proj:/Users/example/repo-a" in out)
+        check("repo-b under parent survives", "proj:/Users/example/repo-b" in out)
+
     print(f"\n=== {PASS} passed, {FAIL} failed ===")
     return FAIL == 0
 

@@ -146,7 +146,7 @@ Tell the agent HOW to use memory. Add a memory section to your existing context 
 - **Entry format:** `[YYYY-MM-DD][cat] content`
   Categories: fact, pref, env, proj:<path>, rel:<name>, task, tmp, rule, meta
 - **[rule] entries** are hard behavioral constraints for the session.
-- **Past-session queries** → use recall skill (hot → episodes → sessions).
+- **Past-session queries** → use recall skill (hot → topic files via `memories/INDEX.md` → episodes → sessions).
   Never fabricate history.
 - **Never fabricate a creation date.** If unsure, use today's.
 ```
@@ -234,8 +234,9 @@ When the agent needs to remember something from the past, search in order:
 | Tier | Source | Method | Speed |
 |------|--------|--------|-------|
 | 1. Hot memory | MEMORY.md + USER.md | Already in context | Instant |
-| 2. Episodes | `episodes/*.md` | Grep by tag/date, then read | Fast |
-| 3. Sessions | Raw transcripts | Full-text search (FTS5, ripgrep) | Slow |
+| 2. Topic files | `memories/INDEX.md` + `memories/*.md` | Check INDEX, then read matching topic files | Fast |
+| 3. Episodes | `episodes/*.md` | Grep by tag/date, then read | Fast |
+| 4. Sessions | Raw transcripts | Full-text search (FTS5, ripgrep) | Slow |
 
 **Stop when confidence plateaus.** Don't search deeper tiers if you already found the answer.
 
