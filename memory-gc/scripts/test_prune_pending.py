@@ -75,8 +75,8 @@ def run():
         pending = make_pending(home, "\n".join([
             "memory\t[2026-06-01][proj:alpha-api] pipeline contract for API service",
             "memory\t[2026-06-01][proj:alpha-web] pipeline contract for web frontend",
-            "memory\t[2026-06-01][proj:alpha-agent] pipeline contract for shared alpha sprawl A",
-            "memory\t[2026-06-01][proj:alpha-wiki] pipeline contract for shared alpha sprawl B",
+            "memory\t[2026-06-01][proj:alpha-agent] pipeline contract for shared alpha sprawl",
+            "memory\t[2026-06-01][proj:alpha-wiki] pipeline contract for shared alpha sprawl",
             "",
         ]))
         proc = run_script(home)
@@ -143,6 +143,98 @@ def run():
         check("same-project general facts run returns 0", proc.returncode == 0)
         check("workspace fact survives", "pnpm workspaces" in out)
         check("supabase fact survives", "Supabase" in out)
+
+    print("\n[8] active tasks beginning with complete survive review window")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        today = date.today().isoformat()
+        pending = make_pending(home, "\n".join([
+            f"memory\t[{today}][task] complete auth migration next week",
+            f"memory\t[{today}][task] completed auth migration yesterday",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("complete-prefix task run returns 0", proc.returncode == 0)
+        check("imperative complete task survives", "complete auth migration next week" in out)
+        check("past-tense completed task drops", "completed auth migration yesterday" not in out)
+
+    print("\n[9] fresh tmp entries survive their seven-day window")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        today = date.today().isoformat()
+        old = (date.today() - timedelta(days=8)).isoformat()
+        pending = make_pending(home, "\n".join([
+            f"memory\t[{today}][tmp] keep same-day scratch note for triage",
+            f"memory\t[{old}][tmp] drop expired scratch note",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("tmp review-window run returns 0", proc.returncode == 0)
+        check("fresh tmp survives", "same-day scratch note" in out)
+        check("expired tmp drops", "expired scratch note" not in out)
+
+    print("\n[10] distinct preferences with ui substrings or tools stay distinct")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        pending = make_pending(home, "\n".join([
+            "user\t[2026-06-01][pref] prefer quiet status updates after deploys",
+            "user\t[2026-06-01][pref] SuiteScript changes should be summarized separately",
+            "user\t[2026-06-01][pref] prefer CLI tool examples over screenshots",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("preference substring run returns 0", proc.returncode == 0)
+        check("quiet preference survives", "quiet status updates" in out)
+        check("SuiteScript preference survives", "SuiteScript changes" in out)
+        check("tool preference survives", "CLI tool examples" in out)
+
+    print("\n[11] distinct memory rules are not collapsed")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        pending = make_pending(home, "\n".join([
+            "memory\t[2026-06-01][rule] never delete memory safety rails during GC",
+            "memory\t[2026-06-01][rule] memory writes must archive discarded pending rows",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("memory-rule run returns 0", proc.returncode == 0)
+        check("safety rail rule survives", "never delete memory safety" in out)
+        check("archive rule survives", "archive discarded pending rows" in out)
+
+    print("\n[12] same-project recognized-topic facts stay distinct")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        pending = make_pending(home, "\n".join([
+            "memory\t[2026-06-01][proj:alpha] auth uses Cognito user pools",
+            "memory\t[2026-06-01][proj:alpha] bearer cookies expire after 12 hours",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("project auth fact run returns 0", proc.returncode == 0)
+        check("Cognito auth fact survives", "auth uses Cognito" in out)
+        check("bearer cookie fact survives", "bearer cookies expire" in out)
+
+    print("\n[13] pruned rows are archived to gc log")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        old = (date.today() - timedelta(days=8)).isoformat()
+        pending = make_pending(home, "\n".join([
+            "memory\t[2026-06-01][proj:alpha-agent] duplicate operational fact",
+            "memory\t[2026-06-01][proj:alpha-wiki] duplicate operational fact",
+            f"memory\t[{old}][tmp] expired scratch note should be recoverable",
+            "",
+        ]))
+        gc_log = pending.parent / ".gc.log"
+        proc = run_script(home)
+        log = gc_log.read_text(encoding="utf-8") if gc_log.exists() else ""
+        check("archive run returns 0", proc.returncode == 0)
+        check("semantic duplicate archived", "duplicate operational fact" in log)
+        check("hard-dropped tmp archived", "expired scratch note should be recoverable" in log)
 
     print(f"\n=== {PASS} passed, {FAIL} failed ===")
     return FAIL == 0

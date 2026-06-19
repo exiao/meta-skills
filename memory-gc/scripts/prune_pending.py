@@ -15,12 +15,14 @@ proj:<name>-cli. The mega_topic function in Pass 2 collapses entries that
 share a project-namespace root into one group.
 """
 
+import hashlib
 import re
 from collections import defaultdict
 from datetime import date, datetime
 from pathlib import Path
 
 PENDING = Path.home() / ".hermes/episodes/.pending.md"
+GC_LOG = PENDING.parent / ".gc.log"
 
 if not PENDING.exists():
     print(f"Pending file {PENDING} does not exist; nothing to prune.")
@@ -44,11 +46,15 @@ for line in lines:
 
 # -- Pass 1: Category-based hard drops + intra-category topic dedup --
 
-HARD_DROP_CATS = {'tmp'}
 TASK_REVIEW_DAYS = 14
-COMPLETED_TASK_KEYWORDS = [
-    'done', 'completed', 'complete', 'resolved', 'closed', 'merged',
-    'abandoned', 'cancelled', 'canceled', 'no longer needed',
+TMP_REVIEW_DAYS = 7
+COMPLETED_TASK_PATTERNS = [
+    re.compile(r'\b(completed|done|resolved|closed|merged|abandoned|cancelled|canceled)\b'),
+    re.compile(r'\bno longer needed\b'),
+    re.compile(
+        r'\b(?:is|was|has been|have been|marked|mark as|mark)\s+'
+        r'(?:complete|done|resolved|closed|merged|abandoned|cancelled|canceled)\b'
+    ),
 ]
 
 # Fact patterns that are transient operational data, not durable memory.
@@ -134,17 +140,33 @@ def _age_days(yyyy_mm_dd):
 def _drop_task(e):
     """Drop only tasks that are stale enough for review or clearly complete."""
     content_lower = e['content'].lower()
-    if any(kw in content_lower for kw in COMPLETED_TASK_KEYWORDS):
+    if any(pattern.search(content_lower) for pattern in COMPLETED_TASK_PATTERNS):
         return True
     age = _age_days(e.get('date', ''))
     return age is not None and age > TASK_REVIEW_DAYS
+
+
+def _drop_tmp(e):
+    """Drop temporary entries only after their short review window expires."""
+    age = _age_days(e.get('date', ''))
+    return age is not None and age > TMP_REVIEW_DAYS
+
+
+def _content_key(content, max_len=96):
+    """Stable, readable content fingerprint for conservative dedupe keys."""
+    normalized = re.sub(r'[^a-z0-9]+', ' ', content.lower())
+    normalized = re.sub(r'\s+', ' ', normalized).strip()
+    if not normalized:
+        return 'empty'
+    digest = hashlib.sha1(normalized.encode('utf-8')).hexdigest()[:12]
+    return f"{normalized[:max_len]}:{digest}"
 
 
 kept = []
 dropped_pass1 = 0
 for e in entries:
     cat = e['cat'].lower()
-    if cat in HARD_DROP_CATS:
+    if cat == 'tmp' and _drop_tmp(e):
         dropped_pass1 += 1
         continue
     if cat == 'task' and _drop_task(e):
@@ -176,49 +198,49 @@ def topic_key(e):
     if cat.startswith('proj:'):
         project = cat
         if 'knowledge' in content or 'wiki' in content or 'entity' in content:
-            return f"{project}:knowledge"
+            return f"{project}:knowledge:{_content_key(content)}"
         if 'proxy' in content or 'gateway' in content:
-            return f"{project}:proxy"
+            return f"{project}:proxy:{_content_key(content)}"
         if 'roadmap' in content or 'phase' in content:
-            return f"{project}:roadmap"
+            return f"{project}:roadmap:{_content_key(content)}"
         if 'middleware' in content or 'validation' in content or 'gate' in content:
-            return f"{project}:validation"
+            return f"{project}:validation:{_content_key(content)}"
         if 'sentry' in content or 'write_todos' in content:
-            return f"{project}:sentry"
+            return f"{project}:sentry:{_content_key(content)}"
         pr_match = re.search(r'pr\s*#?(\d+)', content)
         if pr_match:
-            return f"{project}:pr{pr_match.group(1)}"
+            return f"{project}:pr{pr_match.group(1)}:{_content_key(content)}"
         if 'sandbox' in content or 'vps' in content:
-            return f"{project}:sandbox"
+            return f"{project}:sandbox:{_content_key(content)}"
         if 'dashboard' in content or 'business insights' in content:
-            return f"{project}:dashboard"
+            return f"{project}:dashboard:{_content_key(content)}"
         if 'auth' in content or 'bearer' in content or 'cookie' in content:
-            return f"{project}:auth"
+            return f"{project}:auth:{_content_key(content)}"
         if 'issue' in content and 'cluster' in content:
-            return f"{project}:issues"
+            return f"{project}:issues:{_content_key(content)}"
         if 'site' in content or 'design system' in content or 'unified' in content:
-            return f"{project}:sites"
-        return f"{project}:other:{content[:40]}"
+            return f"{project}:sites:{_content_key(content)}"
+        return f"{project}:other:{_content_key(content)}"
 
     if cat == 'fact':
-        return f'fact:{content[:40]}'
+        return f'fact:{_content_key(content)}'
 
     if cat == 'rule':
         if 'memory' in content:
-            return 'rule:memory'
+            return f'rule:memory:{_content_key(content)}'
         if 'git' in content and ('auth' in content or 'token' in content):
-            return 'rule:git-auth'
-        return f'rule:{content[:40]}'
+            return f'rule:git-auth:{_content_key(content)}'
+        return f'rule:{_content_key(content)}'
 
     if cat == 'pref':
-        if 'ui' in content or 'tool' in content:
-            return 'pref:ui-tool'
-        return f'pref:{content[:40]}'
+        if re.search(r'\b(?:ui|tool|tools)\b', content):
+            return f'pref:ui-tool:{_content_key(content)}'
+        return f'pref:{_content_key(content)}'
 
     if cat == 'meta':
-        return f'meta:{content[:40]}'
+        return f'meta:{_content_key(content)}'
 
-    return f'{cat}:{content[:40]}'
+    return f'{cat}:{_content_key(content)}'
 
 
 topic_groups = defaultdict(list)
@@ -277,10 +299,10 @@ def mega_topic(e):
         root = _ns_root(cat)
         for w in SUBTOPIC_WORDS:
             if w in c:
-                return f'{root}:{w.replace(" ", "-")}'
-        return f'{root}:other:{c[:30]}'
+                return f'{root}:{w.replace(" ", "-")}:{_content_key(c)}'
+        return f'{root}:other:{_content_key(c)}'
 
-    return f'unique:{cat}:{c[:30]}'
+    return f'unique:{cat}:{_content_key(c)}'
 
 
 groups = defaultdict(list)
@@ -299,6 +321,21 @@ print(f"\nFinal: {len(final)} entries")
 # Preserve original order
 idx_map = {id(e): i for i, e in enumerate(entries)}
 final.sort(key=lambda e: idx_map.get(id(e), 999))
+
+
+def _archive_removed(removed):
+    """Append every pruned row to the recoverable GC log before rewriting pending."""
+    if not removed:
+        return
+    GC_LOG.parent.mkdir(parents=True, exist_ok=True)
+    with open(GC_LOG, 'a') as log:
+        log.write(f"\n# prune_pending {date.today().isoformat()} removed {len(removed)} entries\n")
+        for e in removed:
+            log.write(e['raw'] + '\n')
+
+
+final_ids = {id(e) for e in final}
+_archive_removed([e for e in entries if id(e) not in final_ids])
 
 with open(PENDING, 'w') as f:
     for e in final:
