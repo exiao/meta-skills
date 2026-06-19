@@ -28,7 +28,7 @@ The seven skills here cover the whole lifecycle of a skill, from first draft to 
 
 The core idea across `skill-improver`, `agent-improver`, and `optimize-prompt`: **the fix for an unreliable skill isn't rewriting it from intuition, it's measurement.**
 
-1. Turn "good output" into binary checks. Not "is this engaging?" (ungameable, subjective) but "does the first sentence contain a specific claim, not a generic statement?" (observable).
+1. Turn "good output" into specific evaluation criteria. Not "is this engaging?" (ungameable, subjective) but "does the first sentence contain a specific claim, not a generic statement?" (observable).
 2. Split your test inputs into train / validation / test so you can't fool yourself by overfitting.
 3. Change one thing. Re-run. Keep it only if the held-out score goes up. Log every rejected edit.
 4. Stop when it plateaus, then score the sealed test set once.
