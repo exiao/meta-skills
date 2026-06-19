@@ -4,7 +4,7 @@
 Proven pattern from May 2026 sessions. Run AFTER dedup-pending.py (which catches
 exact duplicates). This catches semantic duplicates and cross-category overlap.
 
-Usage: python3 ~/.hermes/skills/memory/memory-gc/scripts/prune_pending.py
+Usage: python3 /path/to/memory-gc/scripts/prune_pending.py
 
 Expected reduction: 191->31 entries (84% removal) on typical daily pending files.
 
@@ -17,6 +17,7 @@ share a project-namespace root into one group.
 
 import re
 from collections import defaultdict
+from datetime import date, datetime
 from pathlib import Path
 
 PENDING = Path.home() / ".hermes/episodes/.pending.md"
@@ -43,7 +44,12 @@ for line in lines:
 
 # -- Pass 1: Category-based hard drops + intra-category topic dedup --
 
-HARD_DROP_CATS = {'task', 'tmp'}
+HARD_DROP_CATS = {'tmp'}
+TASK_REVIEW_DAYS = 14
+COMPLETED_TASK_KEYWORDS = [
+    'done', 'completed', 'complete', 'resolved', 'closed', 'merged',
+    'abandoned', 'cancelled', 'canceled', 'no longer needed',
+]
 
 # Fact patterns that are transient operational data, not durable memory.
 # These get re-extracted every session but have no lasting architectural value.
@@ -116,11 +122,32 @@ GENERIC_CODING_KEYWORDS = [
     'stripincompletemath', 'remarkmath',
 ]
 
+
+def _age_days(yyyy_mm_dd):
+    try:
+        entry_date = datetime.strptime(yyyy_mm_dd, '%Y-%m-%d').date()
+    except (TypeError, ValueError):
+        return None
+    return (date.today() - entry_date).days
+
+
+def _drop_task(e):
+    """Drop only tasks that are stale enough for review or clearly complete."""
+    content_lower = e['content'].lower()
+    if any(kw in content_lower for kw in COMPLETED_TASK_KEYWORDS):
+        return True
+    age = _age_days(e.get('date', ''))
+    return age is not None and age > TASK_REVIEW_DAYS
+
+
 kept = []
 dropped_pass1 = 0
 for e in entries:
-    cat = e['cat']
+    cat = e['cat'].lower()
     if cat in HARD_DROP_CATS:
+        dropped_pass1 += 1
+        continue
+    if cat == 'task' and _drop_task(e):
         dropped_pass1 += 1
         continue
     if cat == 'fact':
@@ -144,7 +171,7 @@ print(f"Pass 1 hard drops: {len(kept)} kept, {dropped_pass1} dropped")
 def topic_key(e):
     """Intra-category topic key. Keep longest entry per key."""
     content = e['content'].lower()
-    cat = e['cat']
+    cat = e['cat'].lower()
 
     if cat.startswith('proj:'):
         project = cat
@@ -171,7 +198,7 @@ def topic_key(e):
             return f"{project}:issues"
         if 'site' in content or 'design system' in content or 'unified' in content:
             return f"{project}:sites"
-        return f"{project}:general"
+        return f"{project}:other:{content[:40]}"
 
     if cat == 'fact':
         return f'fact:{content[:40]}'
@@ -244,7 +271,7 @@ def _ns_root(cat):
 def mega_topic(e):
     """Cross-category topic key that collapses namespace sprawl generically."""
     c = e['content'].lower()
-    cat = e['cat']
+    cat = e['cat'].lower()
 
     if cat.startswith('proj:'):
         root = _ns_root(cat)

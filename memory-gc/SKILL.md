@@ -125,7 +125,7 @@ into smaller patches so one stale line does not cancel the whole pass.
 | `fact`, `pref`         | review at 60d: still true? keep or `remove`         |
 | `env`                  | review at 30d: still accurate? keep or `remove`     |
 | `proj:<path-or-namespace>` | review at 21d; `remove` only when an explicit filesystem path no longer exists |
-| `rel:<name>`           | review at 90d; `remove` if name unmentioned lately  |
+| `rel:<name>`           | never decay; `remove` only with explicit evidence the relationship/contact fact is obsolete or the user asks |
 | `task`                 | review at 14d; `remove` if completed or abandoned   |
 | `tmp`                  | hard `remove` at 7d — no review                     |
 | `rule`, `meta`         | never decay                                         |
@@ -281,10 +281,16 @@ from the script even with 100+ duplicate entries.
 `scripts/prune_pending.py` (in this skill's directory):
 
 ```bash
-python3 ~/.hermes/skills/memory/memory-gc/scripts/prune_pending.py
+SKILL_DIR="${SKILL_DIR:-$HOME/.hermes/skills/memory-gc}"
+python3 "$SKILL_DIR/scripts/prune_pending.py"
 ```
 
-Pass 1 hard-drops all `[task]` and `[tmp]` entries plus rule minutiae,
+If your runtime exposes the loaded skill directory under a different variable or
+path, set `SKILL_DIR` to that `memory-gc/` folder first. The script is bundled
+inside this skill; do not use a path with an extra category directory unless you
+actually installed it there.
+
+Pass 1 hard-drops `[tmp]` entries, stale/completed `[task]` entries, and rule minutiae,
 then deduplicates within each category by topic key (keeps longest per topic).
 Pass 2 collapses cross-category namespace sprawl (the #1 duplication source:
 a single project may generate entries under `proj:<name>`,
@@ -332,7 +338,9 @@ Fallback manual prune pass (if scripting feels overkill for <50 entries):
 1. **Count by topic:** `grep -oE '\[proj:[^]]+\]' .pending.md | sort | uniq -c | sort -rn`
 2. **Nuke duplicates:** For any topic with >5 entries, read them all and write
    ONE consolidated entry per genuinely distinct fact. Discard the rest.
-3. **Kill stale tasks:** Remove ALL `[task]` entries — they're transient.
+3. **Review tasks:** Remove `[task]` entries only when they are past the 14-day
+   review window or clearly completed/abandoned; keep active follow-ups for the
+   normal drain/review path.
 4. **Kill redundant rules:** Remove rules already captured in SOUL.md or MEMORY.md.
 5. **Kill generic coding rules:** Discard ALL rules about language syntax
    (f-strings, imports, line length), basic git usage (stash, merge conflicts,
@@ -519,9 +527,27 @@ configured limit from config (do NOT hardcode it — it has changed before, e.g.
 
 ```bash
 wc -c ~/.hermes/memories/MEMORY.md
-LIMIT=$(grep -E '^\s*memory_char_limit:' ~/.hermes/config.yaml | grep -oE '[0-9]+')
+LIMIT=$(python3 - <<'PY'
+from pathlib import Path
+import re
+cfg = Path.home() / '.hermes/config.yaml'
+limit = ''
+if cfg.exists():
+    for line in cfg.read_text(encoding='utf-8').splitlines():
+        m = re.match(r'\s*memory_char_limit:\s*(\d+)\s*$', line.split('#', 1)[0])
+        if m:
+            limit = m.group(1)
+            break
+print(limit or '8000')
+PY
+)
 echo "limit=$LIMIT target(70%)=$((LIMIT*70/100))"
 ```
+
+Fresh agent-agnostic installs may not have `~/.hermes/config.yaml` or a
+`memory_char_limit` key yet. In that case, fail closed to the documented default
+limit of 8000 chars rather than treating an empty `$LIMIT` as zero and evicting
+all unprotected memory.
 
 The target is **70% of the configured limit** (limit 8000 → target 5600;
 limit 6000 → target 4200). Compute it from `$LIMIT`, never from a memorized

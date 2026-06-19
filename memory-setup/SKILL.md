@@ -250,7 +250,7 @@ Run `memory-gc` daily (via cron, scheduled task, or manual) to keep memory files
 1. **Decay:** Remove stale entries by category (tmp=7d, task=14d, env=30d, fact/pref=60d, rule/meta=never)
 2. **Drain:** Process `episodes/.pending.md` overflow into MEMORY.md
 3. **Promote:** Scan last 7 days of episodes, promote 0-3 durable facts not already in memory
-4. **Prune:** Delete memory files >90 days old, session files >180 days
+4. **Prune:** Use `memory-gc`'s recoverable stale-file step for old episode summaries (>90d) and session logs (>180d). Never delete `MEMORY.md`, `USER.md`, or durable topic files solely because their mtimes are old.
 
 See the `memory-gc` skill for the full implementation.
 

@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import tempfile
+from datetime import date, timedelta
 from pathlib import Path
 
 HERE = Path(__file__).parent
@@ -58,14 +59,14 @@ def run():
     with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
         home = Path(d)
         pending = make_pending(home, "\n".join([
-            "MEMORY\t[2026-06-01][task] drop this transient task",
+            "MEMORY\t[2026-06-01][tmp] drop this transient tmp",
             "USER\t[2026-06-01][pref] keep this stable preference",
             "",
         ]))
         proc = run_script(home)
         out = pending.read_text(encoding="utf-8")
         check("uppercase parse returns 0", proc.returncode == 0)
-        check("uppercase task target hard-dropped", "drop this transient task" not in out)
+        check("uppercase tmp target hard-dropped", "drop this transient tmp" not in out)
         check("uppercase user pref survives", "keep this stable preference" in out)
 
     print("\n[3] hyphenated project namespaces keep distinct roots")
@@ -99,7 +100,23 @@ def run():
         check("env prune run returns 0", proc.returncode == 0)
         check("durable env fact survives", "production API host moved" in out)
 
-    print("\n[5] non-project facts with shared topic words stay distinct")
+    print("\n[5] active pending tasks survive until review window")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        today = date.today().isoformat()
+        old = (date.today() - timedelta(days=30)).isoformat()
+        pending = make_pending(home, "\n".join([
+            f"memory\t[{today}][task] follow up with customer about beta invite",
+            f"memory\t[{old}][task] stale follow-up from last month",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("task review-window run returns 0", proc.returncode == 0)
+        check("fresh task survives pending prune", "follow up with customer" in out)
+        check("stale task is dropped after threshold", "stale follow-up" not in out)
+
+    print("\n[6] non-project facts with shared topic words stay distinct")
     with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
         home = Path(d)
         pending = make_pending(home, "\n".join([
@@ -112,6 +129,20 @@ def run():
         check("non-project shared topic run returns 0", proc.returncode == 0)
         check("auth token fact survives", "auth token rotation" in out)
         check("bearer-cookie fact survives", "bearer-cookie behavior" in out)
+
+    print("\n[7] distinct same-project general facts stay distinct")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        pending = make_pending(home, "\n".join([
+            "memory\t[2026-06-01][proj:alpha] repo uses pnpm workspaces",
+            "memory\t[2026-06-01][proj:alpha] customer data lives in Supabase",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("same-project general facts run returns 0", proc.returncode == 0)
+        check("workspace fact survives", "pnpm workspaces" in out)
+        check("supabase fact survives", "Supabase" in out)
 
     print(f"\n=== {PASS} passed, {FAIL} failed ===")
     return FAIL == 0
