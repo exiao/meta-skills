@@ -6,7 +6,7 @@
 
 Most agent skills are written once and never measured. They work maybe 70% of the time, and the other 30% you get garbage you only notice in production. This is a small toolkit for treating skills like software you can actually engineer: draft them, audit them against a checklist, then run them dozens of times against real evals and keep only the changes that measurably help.
 
-These are [agent skills](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview): structured markdown files that teach an AI agent a specialized workflow, loaded on demand when a task matches. They work with [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Hermes Agent](https://github.com/NousResearch/hermes-agent), Codex, and other skill-aware agents.
+These are [agent skills](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview) to teach your AI agents how to make skills based pn best practices. They work with [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Hermes Agent](https://github.com/NousResearch/hermes-agent), Codex, and other skill-aware agents.
 
 The seven skills here cover the whole lifecycle of a skill, from first draft to measured reliability:
 
@@ -17,9 +17,9 @@ The seven skills here cover the whole lifecycle of a skill, from first draft to 
 | Skill | What it does |
 |-------|--------------|
 | **[skill-creator](skill-creator/)** | Create a new skill from scratch or improve an existing one. Enforces a test-first workflow: write 3+ pressure scenarios that fail *without* the skill before you write a line of the skill itself. Includes an eval viewer to inspect runs. |
-| **[skill-audit](skill-audit/)** | Score any skill against a structured checklist (structure, signal-to-noise, routing, gotchas). Outputs a scorecard with specific fixes. The fast first pass before you spend tokens optimizing. |
-| **[skill-tester](skill-tester/)** | Test an interactive lesson or course by *running* it, not reviewing it. An agent plays both the instructor and a calibrated student persona, capturing a full turn-by-turn transcript of every lesson, then publishes them all raw to one static page. Shows you exactly where a lesson silently breaks. |
-| **[skill-improver](skill-improver/)** | The eval-driven optimizer. Define "good output" as binary yes/no checks, then run a keep/revert loop: baseline, score, diagnose failures, propose one structured edit, and keep it only if held-out validation improves. A stronger optimizer model critiques while the target model executes, because a model can't see its own blind spots. Ships a live HTML dashboard. |
+| **[skill-audit](skill-audit/)** | Score any skill against a structured checklist of gotchas. Outputs a scorecard with specific fixes. The fast first pass before you spend tokens optimizing. |
+| **[skill-tester](skill-tester/)** | Test an interactive skill by *running* it, not reviewing it. An agent plays both the AI agent and a user persona, capturing a full turn-by-turn transcript, then publishes them all raw to one static page. Shows you exactly where it breaks. |
+| **[skill-improver](skill-improver/)** | Improve your skill systematically by using ML techniques to hill climb on your evaluation test cases. |
 | **[agent-improver](agent-improver/)** | Same eval-driven mutation loop, but framework-agnostic. Auto-detects the agent type (ADK, LangChain, CrewAI, AutoGen, a raw HTTP API, or a CLI) and builds the right eval harness around it. Use when the thing you're improving isn't a markdown skill but a whole agent. |
 | **[optimize-prompt](optimize-prompt/)** | The lightweight version: tune a single system prompt with one-change-at-a-time experiments. One artifact, one metric, keep what improves it, revert what doesn't. No harness required. |
 | **[mcporter](mcporter/)** | List, configure, authenticate, and call [MCP](https://modelcontextprotocol.io) servers and tools directly (HTTP or stdio). The plumbing for giving a skill real tools to call. |
