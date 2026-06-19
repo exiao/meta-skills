@@ -236,6 +236,20 @@ def run():
         check("semantic duplicate archived", "duplicate operational fact" in log)
         check("hard-dropped tmp archived", "expired scratch note should be recoverable" in log)
 
+    print("\n[14] absolute project paths keep distinct roots")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        pending = make_pending(home, "\n".join([
+            "memory\t[2026-06-01][proj:/repo-a] auth uses OAuth SSO",
+            "memory\t[2026-06-01][proj:/repo-b] auth uses OAuth SSO",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("absolute project path run returns 0", proc.returncode == 0)
+        check("repo-a path fact survives", "proj:/repo-a" in out)
+        check("repo-b path fact survives", "proj:/repo-b" in out)
+
     print(f"\n=== {PASS} passed, {FAIL} failed ===")
     return FAIL == 0
 

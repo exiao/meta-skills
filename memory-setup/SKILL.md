@@ -234,8 +234,9 @@ When the agent needs to remember something from the past, search in order:
 | Tier | Source | Method | Speed |
 |------|--------|--------|-------|
 | 1. Hot memory | MEMORY.md + USER.md | Already in context | Instant |
-| 2. Episodes | `episodes/*.md` | Grep by tag/date, then read | Fast |
-| 3. Sessions | Raw transcripts | Full-text search (FTS5, ripgrep) | Slow |
+| 2. Topic files | `memories/INDEX.md` + `memories/*.md` | Check INDEX, then read matching topic files | Fast |
+| 3. Episodes | `episodes/*.md` | Grep by tag/date, then read | Fast |
+| 4. Sessions | Raw transcripts | Full-text search (FTS5, ripgrep) | Slow |
 
 **Stop when confidence plateaus.** Don't search deeper tiers if you already found the answer.
 

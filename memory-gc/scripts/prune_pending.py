@@ -280,9 +280,13 @@ def _ns_root(cat):
     """Reduce a proj: category to its namespace root.
 
     proj:foo-agent -> foo ; proj:foo/bar -> foo ; proj:foo-wiki -> foo.
+    proj:/repo-a/subdir -> /repo-a so explicit filesystem roots stay distinct.
     Hyphenated project names without a known sprawl suffix are preserved.
     """
     ns = cat.split(':', 1)[1] if ':' in cat else cat
+    if ns.startswith('/'):
+        first_part = next((part for part in ns.split('/') if part), '')
+        return f'/{first_part}' if first_part else '/'
     ns = ns.split('/', 1)[0]
     root, sep, suffix = ns.rpartition('-')
     if sep and suffix in KNOWN_SPRAWL_SUFFIXES:

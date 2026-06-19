@@ -655,11 +655,13 @@ registry, but only rows with a human-curated description (not `(no description)`
 count as archival references.
 
 ```bash
+SKILL_DIR="${SKILL_DIR:-$HOME/.hermes/skills/memory-gc}"
+
 # 1. Dry run — print candidates, sanity-check them:
-python3 ~/.hermes/skills/memory/memory-gc/scripts/topic_index.py archive-candidates
+python3 "$SKILL_DIR/scripts/topic_index.py" archive-candidates
 
 # 2. If the list looks right, apply (moves files + rebuilds INDEX):
-python3 ~/.hermes/skills/memory/memory-gc/scripts/topic_index.py archive-candidates --apply
+python3 "$SKILL_DIR/scripts/topic_index.py" archive-candidates --apply
 ```
 
 Always run the dry run first and eyeball the list — err on the side of
@@ -671,7 +673,8 @@ any topic-file changes. The logic lives in a tested script (`scripts/topic_index
 not inline here:
 
 ```bash
-python3 ~/.hermes/skills/memory/memory-gc/scripts/topic_index.py rebuild-index
+SKILL_DIR="${SKILL_DIR:-$HOME/.hermes/skills/memory-gc}"
+python3 "$SKILL_DIR/scripts/topic_index.py" rebuild-index
 ```
 
 It regenerates the registry from disk, preserves existing one-line
