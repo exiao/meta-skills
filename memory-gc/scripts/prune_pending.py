@@ -286,7 +286,12 @@ def _ns_root(cat):
     ns = cat.split(':', 1)[1] if ':' in cat else cat
     if ns.startswith('/'):
         first_part = next((part for part in ns.split('/') if part), '')
-        return f'/{first_part}' if first_part else '/'
+        if not first_part:
+            return '/'
+        root, sep, suffix = first_part.rpartition('-')
+        if sep and suffix in KNOWN_SPRAWL_SUFFIXES:
+            first_part = root
+        return f'/{first_part}'
     ns = ns.split('/', 1)[0]
     root, sep, suffix = ns.rpartition('-')
     if sep and suffix in KNOWN_SPRAWL_SUFFIXES:
