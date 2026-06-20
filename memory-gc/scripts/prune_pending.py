@@ -49,7 +49,7 @@ for line in lines:
 TASK_REVIEW_DAYS = 14
 TMP_REVIEW_DAYS = 7
 COMPLETED_TASK_PATTERNS = [
-    re.compile(r'\b(completed|done|resolved|closed|merged|abandoned|cancelled|canceled)\b'),
+    re.compile(r'\b(completed|resolved|closed|merged|abandoned|cancelled|canceled)\b'),
     re.compile(r'\bno longer needed\b'),
     re.compile(
         r'\b(?:is|was|has been|have been|marked|mark as|mark)\s+'
@@ -133,6 +133,11 @@ PROJECT_RULE_SCOPE_RE = re.compile(
     r'for project [\w./~-]+|for repo [\w./~-]+|for repository [\w./~-]+)\b'
 )
 
+USER_RULE_SCOPE_RE = re.compile(
+    r'\b(?:user wants|user prefers|the user wants|the user prefers|'
+    r'i want|i prefer|my tests|my repos?|my scripts?|my code)\b'
+)
+
 
 def _age_days(yyyy_mm_dd):
     try:
@@ -159,10 +164,11 @@ def _drop_tmp(e):
 
 def _content_key(content, max_len=96):
     """Stable, readable content fingerprint for conservative dedupe keys."""
-    normalized = re.sub(r'[^a-z0-9]+', ' ', content.lower())
+    normalized = ''.join(ch if ch.isalnum() else ' ' for ch in content.casefold())
     normalized = re.sub(r'\s+', ' ', normalized).strip()
     if not normalized:
-        return 'empty'
+        digest = hashlib.sha1(content.encode('utf-8')).hexdigest()[:12]
+        return f'raw:{digest}'
     digest = hashlib.sha1(normalized.encode('utf-8')).hexdigest()[:12]
     return f"{normalized[:max_len]}:{digest}"
 
@@ -170,6 +176,11 @@ def _content_key(content, max_len=96):
 def _is_project_scoped_rule(content_lower):
     """True when a rule names a project/repo scope and should get manual triage."""
     return bool(PROJECT_RULE_SCOPE_RE.search(content_lower))
+
+
+def _is_user_scoped_rule(content_lower):
+    """True when a rule encodes a user's own coding preference."""
+    return bool(USER_RULE_SCOPE_RE.search(content_lower))
 
 
 kept = []
@@ -190,10 +201,11 @@ for e in entries:
     if cat == 'rule':
         content_lower = e['content'].lower()
         project_scoped = _is_project_scoped_rule(content_lower)
-        if not project_scoped and any(kw in content_lower for kw in RULE_MINUTIAE_KEYWORDS):
+        user_scoped = _is_user_scoped_rule(content_lower)
+        if not (project_scoped or user_scoped) and any(kw in content_lower for kw in RULE_MINUTIAE_KEYWORDS):
             dropped_pass1 += 1
             continue
-        if not project_scoped and any(kw in content_lower for kw in GENERIC_CODING_KEYWORDS):
+        if not (project_scoped or user_scoped) and any(kw in content_lower for kw in GENERIC_CODING_KEYWORDS):
             dropped_pass1 += 1
             continue
     kept.append(e)

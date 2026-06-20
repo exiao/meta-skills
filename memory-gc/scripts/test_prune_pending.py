@@ -302,6 +302,51 @@ def run():
         check("project migration rule survives", "proj:beta" in out)
         check("generic caplog rule still drops", "pytest logging assertions" not in out)
 
+    print("\n[18] non-ASCII content keeps distinct dedupe keys")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        pending = make_pending(home, "\n".join([
+            "memory\t[2026-06-01][fact] 用户喜欢蓝色",
+            "memory\t[2026-06-01][fact] 用户喜欢绿色",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("unicode fact run returns 0", proc.returncode == 0)
+        check("blue unicode fact survives", "用户喜欢蓝色" in out)
+        check("green unicode fact survives", "用户喜欢绿色" in out)
+
+    print("\n[19] bare done inside active task wording does not complete it")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        today = date.today().isoformat()
+        pending = make_pending(home, "\n".join([
+            f"memory\t[{today}][task] run migration and notify the user when done",
+            f"memory\t[{today}][task] cleanup is done",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("bare-done task run returns 0", proc.returncode == 0)
+        check("task mentioning future done survives", "notify the user when done" in out)
+        check("status-phrased done task drops", "cleanup is done" not in out)
+
+    print("\n[20] user-scoped coding rules survive generic keyword prune")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        pending = make_pending(home, "\n".join([
+            "memory\t[2026-06-01][rule] user wants all shell scripts to use set -e",
+            "memory\t[2026-06-01][rule] prefer caplog fixture for my tests",
+            "memory\t[2026-06-01][rule] use caplog fixture for pytest logging assertions",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("user rule prune run returns 0", proc.returncode == 0)
+        check("user set -e rule survives", "user wants all shell scripts" in out)
+        check("my caplog rule survives", "for my tests" in out)
+        check("generic caplog rule still drops", "pytest logging assertions" not in out)
+
     print(f"\n=== {PASS} passed, {FAIL} failed ===")
     return FAIL == 0
 

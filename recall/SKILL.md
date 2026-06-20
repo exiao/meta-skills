@@ -32,8 +32,12 @@ CLI fix while the plan the user wants is a separate desktop-page UI rework with
 a similar name. Match the user's actual subject (page vs CLI), not just the
 keyword. Run:
 ```bash
-ls ~/.hermes/plans/ ~/.hermes/plans/archive/ | grep -Fi -- '<keyword>'
-grep -Fil -- '<phrase>' ~/.hermes/plans/*.md ~/.hermes/plans/archive/*.md
+shopt -s nullglob
+plan_files=(~/.hermes/plans/*.md ~/.hermes/plans/archive/*.md)
+if ((${#plan_files[@]})); then
+  printf '%s\n' "${plan_files[@]}" | grep -Fi -- '<keyword>' || true
+  grep -Fil -- '<phrase>' "${plan_files[@]}" || true
+fi
 ```
 Then read the matching file and report its path + whether it's archived or active.
 Do not equate `plans/archive/` with shipped work; shipping status requires checking

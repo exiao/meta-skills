@@ -296,7 +296,8 @@ Treat your agent's memory as irreplaceable. Back it up:
 cd "$WORKSPACE"
 git init
 echo -e ".DS_Store\n.env\n**/*.key\n**/*.pem\n**/secrets*" > .gitignore
-git add memories/ episodes/ SOUL.md
+git add memories/ episodes/
+[ -f SOUL.md ] && git add SOUL.md
 git commit -m "Initial memory setup"
 
 # Push to a PRIVATE repo
