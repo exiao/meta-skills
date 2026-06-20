@@ -347,6 +347,39 @@ def run():
         check("my caplog rule survives", "for my tests" in out)
         check("generic caplog rule still drops", "pytest logging assertions" not in out)
 
+    print("\n[21] bare closed/merged words do not complete fresh tasks")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        today = date.today().isoformat()
+        pending = make_pending(home, "\n".join([
+            f"memory\t[{today}][task] coordinate closed beta launch next week",
+            f"memory\t[{today}][task] merged roadmap notes need PM review",
+            f"memory\t[{today}][task] launch checklist was closed yesterday",
+            f"memory\t[{today}][task] release branch has been merged",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("closed/merged task run returns 0", proc.returncode == 0)
+        check("closed beta task survives", "closed beta launch next week" in out)
+        check("merged roadmap task survives", "merged roadmap notes" in out)
+        check("status-phrased closed task drops", "was closed yesterday" not in out)
+        check("status-phrased merged task drops", "has been merged" not in out)
+
+    print("\n[22] identical memory and user rows keep separate targets")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        pending = make_pending(home, "\n".join([
+            "memory\t[2026-06-01][pref] prefer CLI tool examples over screenshots",
+            "user\t[2026-06-01][pref] prefer CLI tool examples over screenshots",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("target-preserve dedupe run returns 0", proc.returncode == 0)
+        check("memory-target duplicate survives", "memory\t[2026-06-01][pref] prefer CLI" in out)
+        check("user-target duplicate survives", "user\t[2026-06-01][pref] prefer CLI" in out)
+
     print(f"\n=== {PASS} passed, {FAIL} failed ===")
     return FAIL == 0
 

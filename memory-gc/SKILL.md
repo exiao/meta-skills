@@ -212,9 +212,14 @@ or run a broad USER preference consolidation.
 ### 2. Apply hard drops (no review, no judgment)
 
 - `[tmp]` entries older than 7 days → `memory` tool, `action: remove`, `old_text` = shortest unique substring.
-- `[proj:<path-or-namespace>]` entries where the tag is explicitly a filesystem path
-  (absolute, `./`, `../`, `~`, or an intentional path with separators) and that path
-  does not exist on disk → archive + remove. Namespace-only project tags such as
+- `[proj:<path-or-namespace>]` entries where the tag is explicitly an absolute
+  filesystem path (or `~` expanded against the current home) and that resolved
+  path does not exist on disk → archive + remove. Do **not** hard-drop
+  `proj:./...` or `proj:../...` merely by resolving them against the GC process
+  cwd; cron may run from `~/.hermes`, not the original project. Only prune a
+  relative project tag after resolving it against a known/stored project root
+  captured with the memory entry. If no such base is available, treat it like a
+  namespace and review/relocate by content. Namespace-only project tags such as
   `proj:<name>-wiki`, `proj:<name>-agent`, or `proj:<name>` are not path checks;
   review them by content and keep/relocate if still useful.
 

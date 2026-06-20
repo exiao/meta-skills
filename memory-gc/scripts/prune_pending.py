@@ -49,7 +49,7 @@ for line in lines:
 TASK_REVIEW_DAYS = 14
 TMP_REVIEW_DAYS = 7
 COMPLETED_TASK_PATTERNS = [
-    re.compile(r'\b(completed|resolved|closed|merged|abandoned|cancelled|canceled)\b'),
+    re.compile(r'\b(completed|resolved|abandoned|cancelled|canceled)\b'),
     re.compile(r'\bno longer needed\b'),
     re.compile(
         r'\b(?:is|was|has been|have been|marked|mark as|mark)\s+'
@@ -217,53 +217,54 @@ def topic_key(e):
     """Intra-category topic key. Keep longest entry per key."""
     content = e['content'].lower()
     cat = e['cat'].lower()
+    target = e.get('target', 'unknown')
 
     if cat.startswith('proj:'):
         project = cat
         if 'knowledge' in content or 'wiki' in content or 'entity' in content:
-            return f"{project}:knowledge:{_content_key(content)}"
+            return f"{target}:{project}:knowledge:{_content_key(content)}"
         if 'proxy' in content or 'gateway' in content:
-            return f"{project}:proxy:{_content_key(content)}"
+            return f"{target}:{project}:proxy:{_content_key(content)}"
         if 'roadmap' in content or 'phase' in content:
-            return f"{project}:roadmap:{_content_key(content)}"
+            return f"{target}:{project}:roadmap:{_content_key(content)}"
         if 'middleware' in content or 'validation' in content or 'gate' in content:
-            return f"{project}:validation:{_content_key(content)}"
+            return f"{target}:{project}:validation:{_content_key(content)}"
         if 'sentry' in content or 'write_todos' in content:
-            return f"{project}:sentry:{_content_key(content)}"
+            return f"{target}:{project}:sentry:{_content_key(content)}"
         pr_match = re.search(r'pr\s*#?(\d+)', content)
         if pr_match:
-            return f"{project}:pr{pr_match.group(1)}:{_content_key(content)}"
+            return f"{target}:{project}:pr{pr_match.group(1)}:{_content_key(content)}"
         if 'sandbox' in content or 'vps' in content:
-            return f"{project}:sandbox:{_content_key(content)}"
+            return f"{target}:{project}:sandbox:{_content_key(content)}"
         if 'dashboard' in content or 'business insights' in content:
-            return f"{project}:dashboard:{_content_key(content)}"
+            return f"{target}:{project}:dashboard:{_content_key(content)}"
         if 'auth' in content or 'bearer' in content or 'cookie' in content:
-            return f"{project}:auth:{_content_key(content)}"
+            return f"{target}:{project}:auth:{_content_key(content)}"
         if 'issue' in content and 'cluster' in content:
-            return f"{project}:issues:{_content_key(content)}"
+            return f"{target}:{project}:issues:{_content_key(content)}"
         if 'site' in content or 'design system' in content or 'unified' in content:
-            return f"{project}:sites:{_content_key(content)}"
-        return f"{project}:other:{_content_key(content)}"
+            return f"{target}:{project}:sites:{_content_key(content)}"
+        return f"{target}:{project}:other:{_content_key(content)}"
 
     if cat == 'fact':
-        return f'fact:{_content_key(content)}'
+        return f'{target}:fact:{_content_key(content)}'
 
     if cat == 'rule':
         if 'memory' in content:
-            return f'rule:memory:{_content_key(content)}'
+            return f'{target}:rule:memory:{_content_key(content)}'
         if 'git' in content and ('auth' in content or 'token' in content):
-            return f'rule:git-auth:{_content_key(content)}'
-        return f'rule:{_content_key(content)}'
+            return f'{target}:rule:git-auth:{_content_key(content)}'
+        return f'{target}:rule:{_content_key(content)}'
 
     if cat == 'pref':
         if re.search(r'\b(?:ui|tool|tools)\b', content):
-            return f'pref:ui-tool:{_content_key(content)}'
-        return f'pref:{_content_key(content)}'
+            return f'{target}:pref:ui-tool:{_content_key(content)}'
+        return f'{target}:pref:{_content_key(content)}'
 
     if cat == 'meta':
-        return f'meta:{_content_key(content)}'
+        return f'{target}:meta:{_content_key(content)}'
 
-    return f'{cat}:{_content_key(content)}'
+    return f'{target}:{cat}:{_content_key(content)}'
 
 
 topic_groups = defaultdict(list)
@@ -329,15 +330,16 @@ def mega_topic(e):
     """Cross-category topic key that collapses namespace sprawl generically."""
     c = e['content'].lower()
     cat = e['cat'].lower()
+    target = e.get('target', 'unknown')
 
     if cat.startswith('proj:'):
         root = _ns_root(cat)
         for w in SUBTOPIC_WORDS:
             if w in c:
-                return f'{root}:{w.replace(" ", "-")}:{_content_key(c)}'
-        return f'{root}:other:{_content_key(c)}'
+                return f'{target}:{root}:{w.replace(" ", "-")}:{_content_key(c)}'
+        return f'{target}:{root}:other:{_content_key(c)}'
 
-    return f'unique:{cat}:{_content_key(c)}'
+    return f'unique:{target}:{cat}:{_content_key(c)}'
 
 
 groups = defaultdict(list)

@@ -83,14 +83,20 @@ themes. If the user's query maps to one of those themes, grep only the
 `tags:` line of each episode file — precise, no false positives from
 passing mentions:
 ```bash
-grep -l "^tags:.*\b<theme>\b" ~/.hermes/episodes/*.md
+shopt -s nullglob
+episode_files=(~/.hermes/episodes/*.md)
+((${#episode_files[@]})) && grep -l "^tags:.*\b<theme>\b" "${episode_files[@]}" || true
+shopt -u nullglob
 ```
 
 ### L2.5 — content match across episode files
 If L2 misses (query not in canonical themes) or returns nothing, grep
 anywhere in episode files:
 ```bash
-grep -Fil -- "<query>" ~/.hermes/episodes/*.md
+shopt -s nullglob
+episode_files=(~/.hermes/episodes/*.md)
+((${#episode_files[@]})) && grep -Fil -- "<query>" "${episode_files[@]}" || true
+shopt -u nullglob
 ```
 
 ### L3 — cat one episode file
@@ -104,7 +110,10 @@ Each session block has `summary:` and `tags:`. This is usually enough.
 When an episode summary dropped the detail you need (exact error string,
 code snippet, command used), grep the raw sessions:
 ```bash
-grep -Fl -- "<query>" ~/.hermes/sessions/*.jsonl
+shopt -s nullglob
+session_files=(~/.hermes/sessions/*.jsonl)
+((${#session_files[@]})) && grep -Fl -- "<query>" "${session_files[@]}" || true
+shopt -u nullglob
 ```
 Expensive — only do this if episodes are too coarse.
 
@@ -121,7 +130,10 @@ When you need the exact text of something from a past session and episode summar
 
 ```bash
 # 1. Find which session file contains the distinctive string
-grep -Fl -- "DISTINCTIVE_PHRASE" ~/.hermes/sessions/*.jsonl
+shopt -s nullglob
+session_files=(~/.hermes/sessions/*.jsonl)
+((${#session_files[@]})) && grep -Fl -- "DISTINCTIVE_PHRASE" "${session_files[@]}" || true
+shopt -u nullglob
 
 # 2. Extract the content field containing it
 python3 -c "
@@ -214,12 +226,15 @@ alone. Verify against the real code surfaces before answering "is X shipped?":
 ```bash
 # 1. The canonical checkout on its default branch
 git -C <repo> branch --show-current          # confirm you're on master/main
-grep -ic "<FeatureMarker>" <repo>/<file>     # e.g. ChatPanel, the function name
+grep -Fic -- "<FeatureMarker>" <repo>/<file> # e.g. ChatPanel, the function name
 
 # 2. Every plausible feature branch (don't trust just one)
-for b in $(git -C <repo> branch -a | grep -iE "<feature-stem>"); do
-  echo "$b: $(git -C <repo> show "$b":<file> | grep -ic '<FeatureMarker>')"
-done
+while IFS= read -r b; do
+  echo "$b: $(git -C <repo> show "$b":<file> | grep -Fic -- '<FeatureMarker>')"
+done < <(
+  git -C <repo> for-each-ref --format='%(refname:short)' refs/heads refs/remotes |
+    grep -iE "<feature-stem>" || true
+)
 
 # 3. Did any PR ever touch that file with that change?
 git -C <repo> log --all --oneline -S "<FeatureMarker>" -- <file>
@@ -227,7 +242,7 @@ gh pr list --repo <org/repo> --state all --search "<feature>" --limit 10
 
 # 4. If it's a hosted demo/site, curl the LIVE surface too — a surge/Render
 #    preview can lag or diverge from the repo, and vice versa.
-curl -s https://<site> | grep -ic "<FeatureMarker>"
+curl -s https://<site> | grep -Fic -- "<FeatureMarker>"
 ```
 
 If grep returns 0 across the checkout, all candidate branches, PR history, AND
