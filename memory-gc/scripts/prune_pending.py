@@ -128,6 +128,11 @@ GENERIC_CODING_KEYWORDS = [
     'stripincompletemath', 'remarkmath',
 ]
 
+PROJECT_RULE_SCOPE_RE = re.compile(
+    r'\b(?:proj:[\w./~:-]+|this project|this repo|this repository|'
+    r'for project [\w./~-]+|for repo [\w./~-]+|for repository [\w./~-]+)\b'
+)
+
 
 def _age_days(yyyy_mm_dd):
     try:
@@ -162,6 +167,11 @@ def _content_key(content, max_len=96):
     return f"{normalized[:max_len]}:{digest}"
 
 
+def _is_project_scoped_rule(content_lower):
+    """True when a rule names a project/repo scope and should get manual triage."""
+    return bool(PROJECT_RULE_SCOPE_RE.search(content_lower))
+
+
 kept = []
 dropped_pass1 = 0
 for e in entries:
@@ -179,10 +189,11 @@ for e in entries:
             continue
     if cat == 'rule':
         content_lower = e['content'].lower()
-        if any(kw in content_lower for kw in RULE_MINUTIAE_KEYWORDS):
+        project_scoped = _is_project_scoped_rule(content_lower)
+        if not project_scoped and any(kw in content_lower for kw in RULE_MINUTIAE_KEYWORDS):
             dropped_pass1 += 1
             continue
-        if any(kw in content_lower for kw in GENERIC_CODING_KEYWORDS):
+        if not project_scoped and any(kw in content_lower for kw in GENERIC_CODING_KEYWORDS):
             dropped_pass1 += 1
             continue
     kept.append(e)
@@ -287,15 +298,15 @@ def _ns_root(cat):
     """Reduce a proj: category to its namespace root.
 
     proj:foo-agent -> foo ; proj:foo/bar -> foo ; proj:foo-wiki -> foo.
-    proj:/Users/me/repo-a -> /Users/me/repo-a so explicit filesystem roots stay distinct.
+    proj:/Users/me/repo-a and proj:./repo-a stay intact so explicit paths stay distinct.
     Hyphenated project names without a known sprawl suffix are preserved.
     """
     ns = cat.split(':', 1)[1] if ':' in cat else cat
-    if ns.startswith('/'):
-        path = '/' + '/'.join(part for part in ns.split('/') if part)
-        if path == '/':
-            return '/'
-        parent, _, leaf = path.rpartition('/')
+    if ns.startswith(('/', './', '../', '~/')) or ns in {'.', '..', '~'}:
+        path = re.sub(r'/+', '/', ns).rstrip('/') or ns
+        parent, sep, leaf = path.rpartition('/')
+        if not sep:
+            return _strip_sprawl_suffix(path)
         leaf = _strip_sprawl_suffix(leaf)
         return f'{parent}/{leaf}' if parent else f'/{leaf}'
     ns = ns.split('/', 1)[0]

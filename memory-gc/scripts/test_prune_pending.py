@@ -268,6 +268,40 @@ def run():
         check("repo-a under parent survives", "proj:/Users/example/repo-a" in out)
         check("repo-b under parent survives", "proj:/Users/example/repo-b" in out)
 
+    print("\n[16] relative project paths keep distinct roots")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        pending = make_pending(home, "\n".join([
+            "memory\t[2026-06-01][proj:./repo-a] auth uses OAuth SSO",
+            "memory\t[2026-06-01][proj:./repo-b] auth uses OAuth SSO",
+            "memory\t[2026-06-01][proj:../repo-c] auth uses OAuth SSO",
+            "memory\t[2026-06-01][proj:~/repo-d] auth uses OAuth SSO",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("relative project path run returns 0", proc.returncode == 0)
+        check("./repo-a relative path survives", "proj:./repo-a" in out)
+        check("./repo-b relative path survives", "proj:./repo-b" in out)
+        check("../repo-c relative path survives", "proj:../repo-c" in out)
+        check("~/repo-d home path survives", "proj:~/repo-d" in out)
+
+    print("\n[17] project-scoped coding rules survive generic keyword prune")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        pending = make_pending(home, "\n".join([
+            "memory\t[2026-06-01][rule] For proj:alpha, use caplog fixture to assert audit log redaction",
+            "memory\t[2026-06-01][rule] For proj:beta, write migration files next to model changes",
+            "memory\t[2026-06-01][rule] use caplog fixture for pytest logging assertions",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("project rule prune run returns 0", proc.returncode == 0)
+        check("project caplog rule survives", "proj:alpha" in out)
+        check("project migration rule survives", "proj:beta" in out)
+        check("generic caplog rule still drops", "pytest logging assertions" not in out)
+
     print(f"\n=== {PASS} passed, {FAIL} failed ===")
     return FAIL == 0
 

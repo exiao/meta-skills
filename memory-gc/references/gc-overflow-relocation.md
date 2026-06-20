@@ -19,7 +19,7 @@ Preserve durable class-level learning without draining noisy PR/task/status fact
 5. Create a new topic file only for a genuinely broad durable class, such as investing research notes, not a PR or one-off incident.
 6. Clear `.pending.md` after relocation/discard.
 7. Rebuild `INDEX.md` and give new files useful one-line descriptions. Avoid leaving `(no description)` for files created this run.
-8. Add hot `[meta] Topic file:` pointers only for new or materially touched high-value files, then re-check `MEMORY.md` size and shorten if it exceeds 4200 bytes.
+8. Add hot `[meta] Topic file:` pointers only for new or materially touched high-value files, then re-check `MEMORY.md` size and shorten only if it exceeds the computed 70% target (`TARGET=$((LIMIT*70/100))`, where `LIMIT` is the configured or default `memory_char_limit`).
 
 ## What not to preserve
 
