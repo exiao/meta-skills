@@ -410,6 +410,24 @@ def run():
         check("slash route survives", "/v1/users accepts GET" in out)
         check("hyphen route survives", "/v1-users accepts GET" in out)
 
+    print("\n[25] generic coding rules with approval-like words still drop")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        pending = make_pending(home, "\n".join([
+            "memory\t[2026-06-01][rule] run ruff format before running tests",
+            "memory\t[2026-06-01][rule] do not use innerHTML without escaping",
+            "memory\t[2026-06-01][rule] do not use innerHTML. Continue without escaping only for trusted fixtures",
+            "memory\t[2026-06-01][rule] Ask the user before running git stash pop",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("approval-like generic rule run returns 0", proc.returncode == 0)
+        check("generic before-running rule drops", "run ruff format before running tests" not in out)
+        check("generic same-sentence do-not-without rule drops", "do not use innerHTML without escaping" not in out)
+        check("cross-sentence do-not/without rule drops", "Continue without escaping" not in out)
+        check("explicit ask-user rule survives", "Ask the user before running git stash pop" in out)
+
     print(f"\n=== {PASS} passed, {FAIL} failed ===")
     return FAIL == 0
 

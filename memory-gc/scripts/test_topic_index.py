@@ -119,14 +119,19 @@ def run():
 
     print("\n[6b] apply_archive never clobbers a same-second suffixed archive")
     mem = make_sandbox()
-    write(mem, "dup.md", body="# newest content\n", mtime=time.time() - 200 * 86400)
-    (mem / "archive").mkdir()
-    # Both the plain and the current-second suffixed destinations already exist,
-    # forcing the suffix-increment loop instead of an overwrite.
-    (mem / "archive" / "dup.md").write_text("# OLD ARCHIVED\n", encoding="utf-8")
-    suffixed = mem / "archive" / f"dup-{int(time.time())}.md"
-    suffixed.write_text("# SAME SECOND ARCHIVE\n", encoding="utf-8")
-    ti.apply_archive(mem, ["dup.md"])
+    original_time = ti.time.time
+    ti.time.time = lambda: 1700000000.0
+    try:
+        write(mem, "dup.md", body="# newest content\n", mtime=time.time() - 200 * 86400)
+        (mem / "archive").mkdir()
+        # Both the plain and the current-second suffixed destinations already exist,
+        # forcing the suffix-increment loop instead of an overwrite.
+        (mem / "archive" / "dup.md").write_text("# OLD ARCHIVED\n", encoding="utf-8")
+        suffixed = mem / "archive" / f"dup-{int(time.time())}.md"
+        suffixed.write_text("# SAME SECOND ARCHIVE\n", encoding="utf-8")
+        ti.apply_archive(mem, ["dup.md"])
+    finally:
+        ti.time.time = original_time
     check("plain archived copy preserved",
           (mem / "archive" / "dup.md").read_text(encoding="utf-8") == "# OLD ARCHIVED\n")
     check("same-second suffixed copy preserved",
