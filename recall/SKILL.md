@@ -135,18 +135,37 @@ session_files=(~/.hermes/sessions/*.jsonl)
 ((${#session_files[@]})) && grep -Fl -- "DISTINCTIVE_PHRASE" "${session_files[@]}" || true
 shopt -u nullglob
 
-# 2. Extract the content field containing it
+# 2. Extract the content field containing it (recurses into nested
+#    message shapes: top-level content/text, messages[], parts[], and
+#    content that is itself a list of blocks like [{"type":"text","text":...}])
 python3 -c "
 import json
+
+NEEDLE = 'DISTINCTIVE_PHRASE'
+
+def walk(obj):
+    if isinstance(obj, str):
+        if NEEDLE in obj:
+            yield obj
+    elif isinstance(obj, dict):
+        for k in ('content', 'text', 'messages', 'parts'):
+            if k in obj:
+                yield from walk(obj[k])
+        # Fall back to any other string-bearing values.
+        for k, v in obj.items():
+            if k not in ('content', 'text', 'messages', 'parts'):
+                yield from walk(v)
+    elif isinstance(obj, list):
+        for item in obj:
+            yield from walk(item)
+
 with open('SESSION_FILE') as f:
     for line in f:
-        if 'DISTINCTIVE_PHRASE' not in line: continue
-        obj = json.loads(line)
-        for key in ['content', 'text']:
-            v = obj.get(key, '')
-            if isinstance(v, str) and 'DISTINCTIVE_PHRASE' in v:
-                print(v[:8000])
-                raise SystemExit
+        if NEEDLE not in line:
+            continue
+        for hit in walk(json.loads(line)):
+            print(hit[:8000])
+            raise SystemExit
 "
 ```
 

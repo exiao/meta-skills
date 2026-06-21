@@ -380,6 +380,36 @@ def run():
         check("memory-target duplicate survives", "memory\t[2026-06-01][pref] prefer CLI" in out)
         check("user-target duplicate survives", "user\t[2026-06-01][pref] prefer CLI" in out)
 
+    print("\n[23] ask-the-user rules survive generic keyword prune")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        pending = make_pending(home, "\n".join([
+            "memory\t[2026-06-01][rule] Ask the user before running git stash pop",
+            "memory\t[2026-06-01][rule] requires user approval before git rebase",
+            "memory\t[2026-06-01][rule] use git stash pop to restore the worktree",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("ask-user rule prune run returns 0", proc.returncode == 0)
+        check("ask-the-user rule survives", "Ask the user before running git stash pop" in out)
+        check("approval-required rule survives", "requires user approval before git rebase" in out)
+        check("generic git rule still drops", "use git stash pop to restore" not in out)
+
+    print("\n[24] facts differing only by punctuation stay distinct")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        pending = make_pending(home, "\n".join([
+            "memory\t[2026-06-01][fact] API route /v1/users accepts GET",
+            "memory\t[2026-06-01][fact] API route /v1-users accepts GET",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("punctuation dedupe run returns 0", proc.returncode == 0)
+        check("slash route survives", "/v1/users accepts GET" in out)
+        check("hyphen route survives", "/v1-users accepts GET" in out)
+
     print(f"\n=== {PASS} passed, {FAIL} failed ===")
     return FAIL == 0
 

@@ -117,6 +117,24 @@ def run():
     others = [p for p in (mem / "archive").glob("dup-*.md")]
     check("new copy archived under suffixed name", len(others) == 1)
 
+    print("\n[6b] apply_archive never clobbers a same-second suffixed archive")
+    mem = make_sandbox()
+    write(mem, "dup.md", body="# newest content\n", mtime=time.time() - 200 * 86400)
+    (mem / "archive").mkdir()
+    # Both the plain and the current-second suffixed destinations already exist,
+    # forcing the suffix-increment loop instead of an overwrite.
+    (mem / "archive" / "dup.md").write_text("# OLD ARCHIVED\n", encoding="utf-8")
+    suffixed = mem / "archive" / f"dup-{int(time.time())}.md"
+    suffixed.write_text("# SAME SECOND ARCHIVE\n", encoding="utf-8")
+    ti.apply_archive(mem, ["dup.md"])
+    check("plain archived copy preserved",
+          (mem / "archive" / "dup.md").read_text(encoding="utf-8") == "# OLD ARCHIVED\n")
+    check("same-second suffixed copy preserved",
+          suffixed.read_text(encoding="utf-8") == "# SAME SECOND ARCHIVE\n")
+    new_copies = [p for p in (mem / "archive").glob("dup-*.md")
+                  if p.read_text(encoding="utf-8") == "# newest content\n"]
+    check("newest copy archived without clobbering", len(new_copies) == 1)
+
     print("\n[7] empty / no-candidate cases are safe")
     mem = make_sandbox()
     check("no candidates on empty dir", ti.archive_candidates(mem) == [])

@@ -135,7 +135,11 @@ PROJECT_RULE_SCOPE_RE = re.compile(
 
 USER_RULE_SCOPE_RE = re.compile(
     r'\b(?:user wants|user prefers|the user wants|the user prefers|'
-    r'i want|i prefer|my tests|my repos?|my scripts?|my code)\b'
+    r'i want|i prefer|my tests|my repos?|my scripts?|my code|'
+    r'ask (?:the )?user|ask first|ask me|confirm with (?:the )?user|'
+    r'requires? (?:user |my )?(?:approval|permission|confirmation|consent)|'
+    r'(?:get|need) (?:user |my )?(?:approval|permission|confirmation|consent)|'
+    r'before running|before executing|do not .* without)\b'
 )
 
 
@@ -163,13 +167,18 @@ def _drop_tmp(e):
 
 
 def _content_key(content, max_len=96):
-    """Stable, readable content fingerprint for conservative dedupe keys."""
+    """Stable, readable content fingerprint for conservative dedupe keys.
+
+    The digest is taken over the RAW casefolded text (punctuation preserved)
+    so technical identifiers that differ only by punctuation, e.g.
+    ``/v1/users`` vs ``/v1-users``, never collapse to the same key. The
+    human-readable prefix is still the alnum-normalized form for legibility.
+    """
     normalized = ''.join(ch if ch.isalnum() else ' ' for ch in content.casefold())
     normalized = re.sub(r'\s+', ' ', normalized).strip()
+    digest = hashlib.sha1(content.casefold().encode('utf-8')).hexdigest()[:12]
     if not normalized:
-        digest = hashlib.sha1(content.encode('utf-8')).hexdigest()[:12]
         return f'raw:{digest}'
-    digest = hashlib.sha1(normalized.encode('utf-8')).hexdigest()[:12]
     return f"{normalized[:max_len]}:{digest}"
 
 
