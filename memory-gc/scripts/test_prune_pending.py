@@ -417,6 +417,7 @@ def run():
             "memory\t[2026-06-01][rule] run ruff format before running tests",
             "memory\t[2026-06-01][rule] do not use innerHTML without escaping",
             "memory\t[2026-06-01][rule] do not use innerHTML. Continue without escaping only for trusted fixtures",
+            "memory\t[2026-06-01][rule] do not follow symlinks without permission checks",
             "memory\t[2026-06-01][rule] Ask the user before running git stash pop",
             "",
         ]))
@@ -426,6 +427,7 @@ def run():
         check("generic before-running rule drops", "run ruff format before running tests" not in out)
         check("generic same-sentence do-not-without rule drops", "do not use innerHTML without escaping" not in out)
         check("cross-sentence do-not/without rule drops", "Continue without escaping" not in out)
+        check("permission-check coding rule drops", "do not follow symlinks without permission checks" not in out)
         check("explicit ask-user rule survives", "Ask the user before running git stash pop" in out)
 
     print(f"\n=== {PASS} passed, {FAIL} failed ===")

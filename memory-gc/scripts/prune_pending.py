@@ -137,10 +137,10 @@ USER_RULE_SCOPE_RE = re.compile(
     r'\b(?:user wants|user prefers|the user wants|the user prefers|'
     r'i want|i prefer|my tests|my repos?|my scripts?|my code|'
     r'ask (?:the )?user|ask first|ask me|confirm with (?:the )?user|'
-    r'requires? (?:user |my )?(?:approval|permission|confirmation|consent)|'
-    r'(?:get|need) (?:user |my )?(?:approval|permission|confirmation|consent)|'
+    r'requires? (?:(?:user |my )?approval|(?:user |my )(?:permission|confirmation|consent))|'
+    r'(?:get|need) (?:(?:user |my )?approval|(?:user |my )(?:permission|confirmation|consent))|'
     r'do not [^.]* without (?:asking (?:the )?(?:user|me)|'
-    r'(?:user |my )?(?:approval|permission|confirmation|consent)))\b'
+    r'(?:user |my )?approval|(?:user |my )(?:permission|confirmation|consent)))\b'
 )
 
 
