@@ -6,12 +6,14 @@ Claude Code can load memory via `CLAUDE.md` and run **native session-end hooks/p
 
 ## Workspace
 
-Use the canonical `~/.hermes` root (shared with `memory-gc` and `recall`), or project `.claude/`:
+Use the canonical `~/.hermes` root — it's the tree that `memory-gc` and `recall` already operate on, so GC, drain, and recall work with zero extra wiring:
 
 ```bash
 WORKSPACE="$HOME/.hermes"
 mkdir -p "$WORKSPACE/memories" "$WORKSPACE/episodes" "$WORKSPACE/sessions"
 ```
+
+A project `.claude/` store is possible but **not** picked up by `memory-gc`/`recall` unless you retarget every one of their commands at that path (otherwise it goes unpruned and unrecalled). Prefer `~/.hermes` unless you have a specific reason to keep memory per-repo.
 
 Create `MEMORY.md` and `USER.md` under `memories/` per the shared spec.
 
@@ -29,6 +31,8 @@ Add a memory section to your `CLAUDE.md` so the store loads every session:
 ```
 
 ## Session-end extraction (recommended)
+
+> **Timeout.** Claude Code's `SessionEnd` hooks run on a short default budget (~1.5s), far too little to read a transcript, call a model, and write files. Detach a fast background worker (`... &` and return immediately, like the Cursor hook) or raise the per-hook timeout, otherwise the extractor is killed before it writes anything.
 
 Configure a `SessionEnd` hook (or plugin) that:
 
