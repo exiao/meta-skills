@@ -132,7 +132,15 @@ def apply_archive(mem: Path, names: list[str]) -> list[str]:
             continue
         dest = arch / name
         if dest.exists():  # never clobber an earlier archived version
-            dest = arch / f"{src.stem}-{int(time.time())}{src.suffix}"
+            # Loop until a suffixed destination is free: same-second archives
+            # (or a prior archive whose suffix matched int(time.time())) would
+            # otherwise overwrite an existing copy despite the never-clobber
+            # contract.
+            n = int(time.time())
+            dest = arch / f"{src.stem}-{n}{src.suffix}"
+            while dest.exists():
+                n += 1
+                dest = arch / f"{src.stem}-{n}{src.suffix}"
         shutil.move(str(src), str(dest))
         moved.append(name)
     return moved

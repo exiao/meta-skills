@@ -380,6 +380,56 @@ def run():
         check("memory-target duplicate survives", "memory\t[2026-06-01][pref] prefer CLI" in out)
         check("user-target duplicate survives", "user\t[2026-06-01][pref] prefer CLI" in out)
 
+    print("\n[23] ask-the-user rules survive generic keyword prune")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        pending = make_pending(home, "\n".join([
+            "memory\t[2026-06-01][rule] Ask the user before running git stash pop",
+            "memory\t[2026-06-01][rule] requires user approval before git rebase",
+            "memory\t[2026-06-01][rule] use git stash pop to restore the worktree",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("ask-user rule prune run returns 0", proc.returncode == 0)
+        check("ask-the-user rule survives", "Ask the user before running git stash pop" in out)
+        check("approval-required rule survives", "requires user approval before git rebase" in out)
+        check("generic git rule still drops", "use git stash pop to restore" not in out)
+
+    print("\n[24] facts differing only by punctuation stay distinct")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        pending = make_pending(home, "\n".join([
+            "memory\t[2026-06-01][fact] API route /v1/users accepts GET",
+            "memory\t[2026-06-01][fact] API route /v1-users accepts GET",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("punctuation dedupe run returns 0", proc.returncode == 0)
+        check("slash route survives", "/v1/users accepts GET" in out)
+        check("hyphen route survives", "/v1-users accepts GET" in out)
+
+    print("\n[25] generic coding rules with approval-like words still drop")
+    with tempfile.TemporaryDirectory(prefix="pp-test-") as d:
+        home = Path(d)
+        pending = make_pending(home, "\n".join([
+            "memory\t[2026-06-01][rule] run ruff format before running tests",
+            "memory\t[2026-06-01][rule] do not use innerHTML without escaping",
+            "memory\t[2026-06-01][rule] do not use innerHTML. Continue without escaping only for trusted fixtures",
+            "memory\t[2026-06-01][rule] do not follow symlinks without permission checks",
+            "memory\t[2026-06-01][rule] Ask the user before running git stash pop",
+            "",
+        ]))
+        proc = run_script(home)
+        out = pending.read_text(encoding="utf-8")
+        check("approval-like generic rule run returns 0", proc.returncode == 0)
+        check("generic before-running rule drops", "run ruff format before running tests" not in out)
+        check("generic same-sentence do-not-without rule drops", "do not use innerHTML without escaping" not in out)
+        check("cross-sentence do-not/without rule drops", "Continue without escaping" not in out)
+        check("permission-check coding rule drops", "do not follow symlinks without permission checks" not in out)
+        check("explicit ask-user rule survives", "Ask the user before running git stash pop" in out)
+
     print(f"\n=== {PASS} passed, {FAIL} failed ===")
     return FAIL == 0
 
