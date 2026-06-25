@@ -1,15 +1,25 @@
 ---
 name: memory-setup
-description: Set up a persistent memory system for any AI coding agent (Claude Code, OpenCode, Assistant Runtime, OpenClaw, etc.). Covers workspace files, memory entry format, session-end extraction, daily garbage collection, multi-tier recall, and optional vector search. Use when someone wants their agent to remember things across sessions, set up memory, or configure persistent context.
+description: Set up a persistent memory system for any AI coding agent (Cursor, Claude Code, OpenCode, OpenClaw, etc.). This file is the shared spec (entry format, categories, episodes, recall, GC); per-platform install steps live in references/<platform>.md. Use when someone wants their agent to remember things across sessions, set up memory, or configure persistent context.
 ---
 
 # Memory Setup
 
-Set up persistent memory for an AI coding agent so it remembers context, preferences, decisions, and lessons across sessions. This is agent-agnostic — works with Claude Code, OpenCode, Hermes Agent, OpenClaw, or any agent that can read/write files.
+Set up persistent memory for an AI coding agent so it remembers context, preferences, decisions, and lessons across sessions. Agent-agnostic — works with any agent that can read/write files.
 
 ## Core Principle
 
-AI agents have no memory between sessions unless you write things to disk. Memory = files. This skill sets up the file structure, entry format, lifecycle hooks, and maintenance routines that make memory work end-to-end.
+AI agents have no memory between sessions unless you write things to disk. Memory = files. This skill defines the file structure, entry format, and maintenance routines; the per-platform guides wire them into a specific agent.
+
+## Choose your platform
+
+Read **only** the guide for your agent — each is self-contained for install steps and refers back to this file for the shared spec.
+
+| Platform | Setup guide |
+|----------|-------------|
+| **Cursor** | [`references/cursor.md`](references/cursor.md) — alwaysApply rule + optional `sessionEnd` hook |
+| **Claude Code** | [`references/claude-code.md`](references/claude-code.md) — `CLAUDE.md` + native `SessionEnd` hook |
+| **OpenCode / Hermes / OpenClaw / any file-based agent** | [`references/generic.md`](references/generic.md) — `~/.hermes` workspace + operating-instructions rule |
 
 ---
 
@@ -18,61 +28,33 @@ AI agents have no memory between sessions unless you write things to disk. Memor
 ```
                     SESSION START
                     ─────────────
-                    Load MEMORY.md + USER.md → system prompt (frozen snapshot)
+                    Load MEMORY.md + USER.md → system prompt
                     Load SOUL.md / AGENTS.md / CLAUDE.md → operating instructions
                             │
                             ▼
                     DURING SESSION
                     ──────────────
-                    Agent writes to MEMORY.md / USER.md via tool or direct edit
-                    Full transcript saved to session store (SQLite, JSONL, etc.)
+                    Agent appends durable facts to MEMORY.md the moment they appear
                             │
                             ▼
-                    SESSION END
+                    SESSION END (optional backstop)
                     ───────────
-                    Extract durable facts from transcript → MEMORY.md / USER.md
+                    Extract any missed facts from transcript → MEMORY.md
                     Write episode summary → episodes/YYYY-MM-DD.md
                             │
                             ▼
                     DAILY MAINTENANCE (memory-gc)
                     ────────────────────────────
-                    Decay stale entries │ Drain pending overflow
-                    Promote durable facts from episodes │ Prune old files
+                    Decay stale entries │ Drain pending overflow │ Prune old files
 ```
 
-## Step 1: Create the Workspace
+---
 
-Use the same canonical workspace root that `memory-gc` and `recall` operate on:
-`~/.hermes`. Agents that use a different config directory should still read and
-write this memory workspace (or update every `memory-gc`/`recall` command to the
-same alternate root). Do not initialize this toolkit under `~/.agent` while daily
-GC still points at `~/.hermes`, or GC will prune the wrong tree.
+## Shared spec
 
-Common agent config locations you may need to point at this workspace:
+### Memory files
 
-| Agent | Default Location |
-|-------|-----------------|
-| Claude Code | `~/.claude/` or project `.claude/` |
-| Cursor | `~/.cursor/` or project `.cursor/` (see [Cursor Setup](#cursor-setup)) |
-| OpenCode | `~/.opencode/` |
-| Hermes Agent | `~/.hermes/` |
-| OpenClaw | `~/.openclaw/workspace/` |
-| Generic | point your agent at `~/.hermes/` |
-
-```bash
-WORKSPACE="$HOME/.hermes"  # canonical root used by memory-gc and recall
-mkdir -p "$WORKSPACE/memories"
-mkdir -p "$WORKSPACE/episodes"
-mkdir -p "$WORKSPACE/plans"
-mkdir -p "$WORKSPACE/plans/archive"
-mkdir -p "$WORKSPACE/sessions"
-```
-
-## Step 2: Create Core Memory Files
-
-### MEMORY.md — Long-term curated memory
-
-The primary memory file. Loaded into system prompt at session start. Contains durable facts, preferences, project context, and lessons learned.
+**MEMORY.md** — long-term curated memory, loaded every session:
 
 ```markdown
 # MEMORY.md
@@ -84,7 +66,22 @@ The primary memory file. Loaded into system prompt at session start. Contains du
 §
 ```
 
-**Entry format:** `[YYYY-MM-DD][cat] content`
+**USER.md** — stable user profile, loaded alongside MEMORY.md:
+
+```markdown
+# USER.md
+
+- **Name:** (your name)
+- **Timezone:** (e.g. America/New_York)
+- **Communication style:** (how you like to be talked to)
+- **Key preferences:** (tools, languages, frameworks you prefer)
+```
+
+**SOUL.md** (optional) — agent persona/tone/boundaries. Loaded automatically by some agents, otherwise referenced from AGENTS.md / CLAUDE.md.
+
+### Entry format & categories
+
+`[YYYY-MM-DD][cat] content`, one entry per `§`-separated block.
 
 | Category | Purpose | Decay |
 |----------|---------|-------|
@@ -98,368 +95,82 @@ The primary memory file. Loaded into system prompt at session start. Contains du
 | `rule` | Hard behavioral constraints | Never |
 | `meta` | System configuration | Never |
 
-**Rules:**
-- Date = creation date only, never updated
-- `§` separator between entries
-- `[rule]` entries are hard constraints the agent must follow
-- Keep under ~100 entries — use `memory-gc` to prune
+Rules: date = creation date only (never updated); `[rule]` entries are hard constraints; **capture incrementally** (write the moment a fact appears, not at session end); never fabricate dates; keep under ~100 entries (use `memory-gc` to prune).
 
-### USER.md — User profile
+### Episodes
 
-Loaded every session alongside MEMORY.md. Contains stable info about the user.
-
-```markdown
-# USER.md
-
-- **Name:** (your name)
-- **Timezone:** (e.g. America/New_York)
-- **Communication style:** (how you like to be talked to)
-- **Key preferences:** (tools, languages, frameworks you prefer)
-```
-
-### SOUL.md — Agent persona (optional)
-
-Sets tone, personality, and boundaries. Some agents load this automatically; others need it referenced in CLAUDE.md or AGENTS.md.
-
-```markdown
-# SOUL.md
-
-## Vibe
-Direct, concise, casual. No corporate speak.
-
-## Boundaries
-- Private things stay private
-- Ask before acting externally (emails, posts, deploys)
-
-## Continuity
-These files are your memory. Read them. Update them.
-```
-
-### AGENTS.md / CLAUDE.md — Operating instructions
-
-Tell the agent HOW to use memory. Add a memory section to your existing context file:
-
-```markdown
-## Memory
-
-- **Capture is automatic.** Session-end hooks extract durable memories.
-  For urgent items, write inline: `[YYYY-MM-DD][cat] content`
-- **Entry format:** `[YYYY-MM-DD][cat] content`
-  Categories: fact, pref, env, proj:<path>, rel:<name>, task, tmp, rule, meta
-- **[rule] entries** are hard behavioral constraints for the session.
-- **Past-session queries** → use recall skill (hot → topic files via `memories/INDEX.md` → episodes → sessions).
-  Never fabricate history.
-- **Never fabricate a creation date.** If unsure, use today's.
-```
-
-## Step 3: Session-End Memory Extraction
-
-At the end of each session, extract durable facts from the conversation and write them to memory files. This can be done via:
-
-### Option A: Agent hook/plugin (recommended)
-
-If your agent supports session-end hooks, configure one that:
-1. Pulls the last 30-40 turns from the session transcript
-2. Sends them to a fast model (e.g. Haiku, GPT-4o-mini) with an extraction prompt
-3. Writes extracted entries to MEMORY.md / USER.md
-4. Writes an episode summary to `episodes/YYYY-MM-DD.md`
-5. Writes overflow queue rows to `episodes/.pending.md` when hot memory is full
-
-**Extraction prompt template:**
-
-```
-Review this conversation. Extract durable memories worth keeping.
-
-Return JSON:
-{
-  "entries": [
-    {"cat": "fact|pref|env|proj:<path-or-namespace>|rel:<name>|task|tmp|rule|meta", "target": "MEMORY|USER", "content": "..."}
-  ],
-  "episode": {
-    "summary": "One paragraph summary of the session",
-    "tags": ["tag1", "tag2"]
-  }
-}
-
-Rules:
-- Only extract what's worth remembering across sessions
-- Skip small talk, debugging noise, routine commands
-- Prefer specific facts over vague summaries
-- Use the correct category for each entry: project context goes in `proj:<path-or-namespace>`; person/user facts go in `rel:<name>` when they are about another person, or `USER` when they describe the user.
-- If nothing worth saving, return empty arrays
-```
-
-### Option B: Manual prompt at end of session
-
-If hooks aren't available, end sessions with:
-
-> "Before we end, write any important decisions, preferences, or facts from this session to MEMORY.md using the `[YYYY-MM-DD][cat] content` format."
-
-### Option C: CLAUDE.md instruction
-
-Add to your CLAUDE.md:
-
-```markdown
-## Session End
-Before ending any session, review the conversation for durable facts, decisions,
-or corrections. Write them to MEMORY.md in `[YYYY-MM-DD][cat] content` format.
-Write a 1-paragraph episode summary to episodes/YYYY-MM-DD.md.
-```
-
-## Step 4: Episode Summaries
-
-Episodes are daily session summaries that form the middle tier of recall. Each day gets one file with all sessions appended:
-
-**File:** `episodes/YYYY-MM-DD.md`
+Daily session summaries — the middle recall tier. One file per day, sessions appended:
 
 ```markdown
 ## Episode — 2:30 PM
 
-**Summary:** Set up CI pipeline for the new API. Decided on GitHub Actions over CircleCI. Fixed a flaky test in the auth module.
+**Summary:** Set up CI pipeline. Chose GitHub Actions over CircleCI. Fixed a flaky auth test.
 
 tags: devops, ci, testing, auth
 
 ---
-
-## Episode — 7:15 PM
-
-**Summary:** Reviewed PR #42, discussed pricing strategy for the Pro tier. User prefers value-based pricing over cost-plus.
-
-tags: code-review, pricing, product
 ```
 
-## Step 5: Multi-Tier Recall
+### Multi-tier recall
 
-When the agent needs to remember something from the past, search in order:
+Search in order, stop when confident:
 
-| Tier | Source | Method | Speed |
-|------|--------|--------|-------|
-| 1. Hot memory | MEMORY.md + USER.md | Already in context | Instant |
-| 2. Topic files | `memories/INDEX.md` + `memories/*.md` | Check INDEX, then read matching topic files | Fast |
-| 3. Episodes | `episodes/*.md` | Grep by tag/date, then read | Fast |
-| 4. Sessions | Raw transcripts | Full-text search (FTS5, ripgrep) | Slow |
+| Tier | Source | Method |
+|------|--------|--------|
+| 1. Hot | MEMORY.md + USER.md | Already in context |
+| 2. Topic files | `memories/*.md` (via `memories/INDEX.md`) | Read matching files |
+| 3. Episodes | `episodes/*.md` | Grep by tag/date |
+| 4. Sessions | Raw transcripts | Full-text search (ripgrep/FTS5) |
 
-**Stop when confidence plateaus.** Don't search deeper tiers if you already found the answer.
+Use both semantic (vector) and exact (grep) search — one alone misses things.
 
-**Always use both:**
-- **Semantic search** (vector/embedding) for fuzzy concept matching
-- **Exact search** (grep/ripgrep) for specific strings, names, IDs
+### Daily garbage collection
 
-## Step 6: Daily Garbage Collection
+Run `memory-gc` daily (cron/launchd) to keep files clean:
 
-Run `memory-gc` daily (via cron, scheduled task, or manual) to keep memory files clean:
+1. **Decay** stale entries by category TTL (tmp=7d, task=14d, env/proj=30d, fact/pref=60d, rule/meta/rel=never).
+2. **Drain** `episodes/.pending.md` overflow into MEMORY.md.
+3. **Promote** 0-3 durable facts from the last 7 days of episodes.
+4. **Prune** old episode summaries (>90d) and session logs (>180d). Never delete MEMORY.md/USER.md by mtime.
 
-1. **Decay:** Remove stale entries by category (tmp=7d, task=14d, env=30d, fact/pref=60d, rule/meta=never)
-2. **Drain:** Process `episodes/.pending.md` overflow into MEMORY.md
-3. **Promote:** Scan last 7 days of episodes, promote 0-3 durable facts not already in memory
-4. **Prune:** Use `memory-gc`'s recoverable stale-file step for old episode summaries (>90d) and session logs (>180d). Never delete `MEMORY.md`, `USER.md`, or durable topic files solely because their mtimes are old.
+### Overflow
 
-See the `memory-gc` skill for the full implementation.
+When MEMORY.md exceeds ~100 entries, append new entries to `episodes/.pending.md`; GC drains them after decaying old ones.
 
-## Step 7: Optional — Vector Search
+### Optional: vector search
 
-For large memory stores, add semantic vector search:
+For large stores, index `memories/` and `sessions/` with embeddings (OpenAI, Gemini, Voyage, or local Ollama). Config depends on the agent.
 
-```bash
-# Example: index memory files with embeddings
-# Provider options: OpenAI, Gemini, Voyage, Ollama (local)
-
-# Gemini (free tier available)
-# Get key at https://aistudio.google.com/app/apikey
-export GEMINI_API_KEY="your-key"
-
-# OpenAI
-export OPENAI_API_KEY="your-key"
-```
-
-Configure your agent's memory search to index both `memories/` and `sessions/` directories. The exact config depends on your agent platform.
-
-## Step 8: Overflow Handling
-
-When MEMORY.md gets too large (>100 entries), new entries should go to `episodes/.pending.md` instead. The daily GC drains pending entries after decaying old ones to make room.
-
-```
-memories/
-├── MEMORY.md          ← Hot memory (target: ~60-100 entries)
-└── USER.md            ← User profile
-
-episodes/
-├── YYYY-MM-DD.md      ← Daily session summaries
-├── .pending.md        ← Overflow queue (drained by memory-gc)
-└── .gc.log            ← GC audit log
-```
-
-## Step 9: Backup
-
-Treat your agent's memory as irreplaceable. Back it up:
-
-```bash
-cd "$WORKSPACE"
-git init
-echo -e ".DS_Store\n.env\n**/*.key\n**/*.pem\n**/secrets*" > .gitignore
-git add memories/ episodes/
-[ -f SOUL.md ] && git add SOUL.md
-git commit -m "Initial memory setup"
-
-# Push to a PRIVATE repo
-gh repo create agent-memory --private --source . --push
-```
-
-Consider a periodic backup (cron every 30 min or daily) that auto-commits and pushes.
-
-## Cursor Setup
-
-Cursor has no `~/.hermes`-style plugin that can run an extractor model for you, so the mapping differs from Claude Code. In Cursor, an **always-applied rule is the primary engine** (it loads and captures memory in-context, reliably and at zero extra token cost), and **hooks** are an optional automation layer.
-
-**Cursor itself is the LLM, so no external CLI is required.** The reliability trick is to have the rule capture memory **incrementally** — writing each durable fact the moment it appears, in the same turn — rather than at session end. Sessions often end with no final agent turn, so any "save it at the end" strategy silently loses data. The optional `cursor-agent` hook below is only a backstop for catching the final turns automatically; if you have no CLI, incremental rule capture alone is a complete setup.
-
-### How the concepts map
-
-| Generic concept | Cursor primitive |
-|-----------------|------------------|
-| Load memory at session start | `alwaysApply` rule (`.cursor/rules/memory.mdc`) — instructs the agent to read the store first |
-| Operating instructions (AGENTS.md / CLAUDE.md) | The same rule, or your `AGENTS.md` (Cursor reads it) |
-| Session-end extraction hook | `sessionEnd` hook in `.cursor/hooks.json` → script that spawns `cursor-agent` (optional) |
-| Daily GC | `memory-gc.py` run via `cron` / `launchd` |
-
-Scope is your choice: project-local (`<repo>/.cursor/`, memory tied to one repo) or global (`~/.cursor/`, shared across all projects). Project hooks and user hooks **merge**, so a project `.cursor/hooks.json` coexists with an existing `~/.cursor/hooks.json`.
-
-### Directory layout
-
-```
-.cursor/
-├── rules/
-│   └── memory.mdc          ← alwaysApply rule: load + capture + recall (the engine)
-├── hooks.json              ← optional: sessionEnd → extraction hook
-├── hooks/
-│   └── memory-extract.sh   ← optional: spawns cursor-agent to extract at session end
-└── memory/
-    ├── MEMORY.md           ← hot memory
-    ├── USER.md             ← user profile
-    ├── memory-gc.py        ← daily decay / drain / prune
-    └── episodes/
-        ├── YYYY-MM-DD.md   ← daily summaries
-        └── .pending.md     ← overflow queue
-```
-
-### The rule (primary mechanism)
-
-`.cursor/rules/memory.mdc` — `alwaysApply: true` so it loads every session:
-
-```markdown
----
-description: Persistent cross-session memory. Load at session start, capture durable facts, recall on demand.
-alwaysApply: true
----
-
-# Memory
-
-This workspace has a persistent memory store at `.cursor/memory/`.
-
-## At session start
-Read `.cursor/memory/MEMORY.md` and `.cursor/memory/USER.md` before substantive work.
-
-## Capturing memory (save incrementally — do not wait for session end)
-Append the moment a durable fact appears. As soon as the user states a durable fact,
-preference, decision, correction, or constraint, append it to `.cursor/memory/MEMORY.md`
-in the same turn — do not defer to the end of the session (sessions often end with no
-final turn, so deferred saves are lost). Format: `[YYYY-MM-DD][cat] content`, preceded by
-a `§` line. (Categories and decay rules: see the Step 2 table.) Skip small talk and noise.
-If MEMORY.md exceeds ~100 entries, append to `.cursor/memory/episodes/.pending.md` instead.
-
-## Recalling the past
-Search in order, stop when confident: hot (MEMORY.md/USER.md) → episodes/*.md (grep by tag/date) → raw chat history.
-Use both exact (ripgrep) and meaning-based search.
-```
-
-### Optional step: automatic session-end extraction (`cursor-agent`)
-
-This step is **entirely optional** — skip it if you only have the Cursor app, since incremental rule capture already covers you. If `cursor-agent` is installed *and authenticated* (`cursor-agent login`; it has its own auth, separate from `gh`), you can add a `sessionEnd` hook as a backstop that auto-extracts the final turns. Keep it **opt-in** (LLM calls cost tokens) and **recursion-guarded** (the extractor's own session would otherwise re-trigger the hook in an infinite loop). Any headless agent CLI works in place of `cursor-agent` (e.g. `claude -p`, `codex exec`, `gemini -y`).
-
-`.cursor/hooks.json`:
-
-```json
-{
-  "version": 1,
-  "hooks": {
-    "sessionEnd": [
-      { "command": ".cursor/hooks/memory-extract.sh" }
-    ]
-  }
-}
-```
-
-`.cursor/hooks/memory-extract.sh` (make it executable):
-
-```bash
-#!/usr/bin/env bash
-set -uo pipefail
-# Recursion guard: the extractor runs cursor-agent, whose sessionEnd re-fires this hook.
-[ "${CURSOR_MEMORY_EXTRACTING:-}" = "1" ] && exit 0
-# Opt-in: rule-based capture is the default; enable via CURSOR_MEMORY_AUTO_EXTRACT=1
-[ "${CURSOR_MEMORY_AUTO_EXTRACT:-}" = "1" ] || exit 0
-
-input="$(cat 2>/dev/null || true)"
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-MEM="$REPO/.cursor/memory"
-T="$(printf '%s' "$input" | jq -r '.transcript_path // .transcript // empty' 2>/dev/null || true)"
-[ -n "$T" ] && [ -f "$T" ] || exit 0
-
-DATE="$(date +%F)"
-PROMPT="Read the transcript at $T and $MEM/MEMORY.md (to avoid dupes). Append durable
-memories to $MEM/MEMORY.md as [$DATE][cat] content lines (each preceded by §), and a
-one-paragraph episode to $MEM/episodes/$DATE.md. Skip noise. Be terse. Do nothing else."
-
-CURSOR_MEMORY_EXTRACTING=1 nohup cursor-agent -p -f --output-format text "$PROMPT" >/dev/null 2>&1 &
-exit 0
-```
-
-Hooks fail open and exit fast so they never block Cursor. Enable extraction with `export CURSOR_MEMORY_AUTO_EXTRACT=1`. After editing `hooks.json`, check **Settings → Hooks**; restart Cursor if the hook doesn't load.
-
-### Notes
-
-- `mdc` rules live only in `.cursor/rules/`; there is no global rules file, so for cross-project memory either use a global `~/.cursor/rules/memory.mdc` or rely on a per-repo rule.
-- Cursor's `sessionEnd` payload shape can vary; the hook above probes common transcript fields and no-ops if none is found.
-- The rule alone is a complete, reliable setup — the hook is purely a backstop.
-
-## File Layout Summary
+### File layout
 
 ```
 $WORKSPACE/
-├── SOUL.md                 ← Agent persona (optional)
-├── AGENTS.md / CLAUDE.md   ← Operating instructions
 ├── memories/
-│   ├── MEMORY.md           ← Hot memory (loaded every session)
-│   └── USER.md             ← User profile (loaded every session)
+│   ├── MEMORY.md      ← hot memory (loaded every session)
+│   └── USER.md        ← user profile
 ├── episodes/
-│   ├── YYYY-MM-DD.md       ← Daily session summaries
-│   ├── .pending.md         ← Overflow queue
-│   └── .gc.log             ← GC audit log
-├── sessions/
-│   └── *.jsonl             ← Raw transcripts (optional)
-├── plans/
-│   ├── <task>.md            ← Active plans
-│   └── archive/             ← Completed plans
-└── skills/                  ← Skill definitions
+│   ├── YYYY-MM-DD.md  ← daily summaries
+│   ├── .pending.md    ← overflow queue
+│   └── .gc.log        ← GC audit log
+├── sessions/          ← raw transcripts (optional)
+└── SOUL.md            ← agent persona (optional)
 ```
+
+---
 
 ## Verification
 
-After setup, test the memory loop:
-
 1. Tell your agent: "Remember that my favorite color is blue."
-2. End the session (or trigger session-end extraction)
-3. Start a new session
-4. Ask: "What's my favorite color?"
-
-The agent should find it in MEMORY.md or via recall.
+2. Start a new session.
+3. Ask: "What's my favorite color?" — it should find it in MEMORY.md.
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---------|-----|
-| Agent doesn't remember anything | Check MEMORY.md is being loaded into system prompt at session start |
-| Memory grows unbounded | Set up memory-gc cron job, check decay rules |
-| Session-end extraction misses things | Increase turn count in extraction (try 40-50), check model isn't skipping |
-| Recall returns nothing | Use both grep (exact) AND semantic search (fuzzy) — one alone misses things |
-| .pending.md keeps growing | GC isn't running or MEMORY.md is at capacity — decay more aggressively |
+| Agent doesn't remember anything | Confirm MEMORY.md is loaded at session start (rule / CLAUDE.md / system prompt) |
+| Memory grows unbounded | Set up the `memory-gc` cron job; check decay rules |
+| Session-end extraction misses things | Prefer incremental capture; if extracting, raise turn count (40-50) |
+| Auto-extraction writes nothing | The extractor CLI isn't installed or authenticated (e.g. `cursor-agent login`) |
+| Recall returns nothing | Use both grep (exact) AND semantic search (fuzzy) |
+| `.pending.md` keeps growing | GC isn't running or MEMORY.md is at capacity — decay more aggressively |
