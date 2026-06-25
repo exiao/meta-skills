@@ -311,6 +311,8 @@ Consider a periodic backup (cron every 30 min or daily) that auto-commits and pu
 
 Cursor has no `~/.hermes`-style plugin that can run an extractor model for you, so the mapping differs from Claude Code. In Cursor, an **always-applied rule is the primary engine** (it loads and captures memory in-context, reliably and at zero extra token cost), and **hooks** are an optional automation layer.
 
+**Cursor itself is the LLM, so no external CLI is required.** The reliability trick is to have the rule capture memory **incrementally** — writing each durable fact the moment it appears, in the same turn — rather than at session end. Sessions often end with no final agent turn, so any "save it at the end" strategy silently loses data. The optional `cursor-agent` hook below is only a backstop for catching the final turns automatically; if you have no CLI, incremental rule capture alone is a complete setup.
+
 ### How the concepts map
 
 | Generic concept | Cursor primitive |
@@ -357,10 +359,12 @@ This workspace has a persistent memory store at `.cursor/memory/`.
 ## At session start
 Read `.cursor/memory/MEMORY.md` and `.cursor/memory/USER.md` before substantive work.
 
-## Capturing memory
-When the user states a durable fact, preference, decision, or constraint, append it
-to `.cursor/memory/MEMORY.md` as `[YYYY-MM-DD][cat] content`, preceded by a `§` line.
-(Categories and decay rules: see the Step 2 table.) Skip small talk and noise.
+## Capturing memory (save incrementally — do not wait for session end)
+Append the moment a durable fact appears. As soon as the user states a durable fact,
+preference, decision, correction, or constraint, append it to `.cursor/memory/MEMORY.md`
+in the same turn — do not defer to the end of the session (sessions often end with no
+final turn, so deferred saves are lost). Format: `[YYYY-MM-DD][cat] content`, preceded by
+a `§` line. (Categories and decay rules: see the Step 2 table.) Skip small talk and noise.
 If MEMORY.md exceeds ~100 entries, append to `.cursor/memory/episodes/.pending.md` instead.
 
 ## Recalling the past
@@ -368,9 +372,9 @@ Search in order, stop when confident: hot (MEMORY.md/USER.md) → episodes/*.md 
 Use both exact (ripgrep) and meaning-based search.
 ```
 
-### Optional: automatic session-end extraction (`cursor-agent`)
+### Optional step: automatic session-end extraction (`cursor-agent`)
 
-If `cursor-agent` is installed, add a `sessionEnd` hook as a backup to the rule. Keep it **opt-in** (LLM calls cost tokens) and **recursion-guarded** (the extractor's own session would otherwise re-trigger the hook in an infinite loop).
+This step is **entirely optional** — skip it if you only have the Cursor app, since incremental rule capture already covers you. If `cursor-agent` is installed *and authenticated* (`cursor-agent login`; it has its own auth, separate from `gh`), you can add a `sessionEnd` hook as a backstop that auto-extracts the final turns. Keep it **opt-in** (LLM calls cost tokens) and **recursion-guarded** (the extractor's own session would otherwise re-trigger the hook in an infinite loop). Any headless agent CLI works in place of `cursor-agent` (e.g. `claude -p`, `codex exec`, `gemini -y`).
 
 `.cursor/hooks.json`:
 
