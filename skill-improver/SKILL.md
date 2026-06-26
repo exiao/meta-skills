@@ -3,7 +3,7 @@ name: skill-improver
 description: "Eval-driven skill optimizer: runs a skill repeatedly, scores outputs against binary evals, mutates the prompt via structured edits, and keeps only changes that improve a held-out validation score (cross-model optimizer/target, three-way splits, golden cases, checkpoint resume). Use when: optimize/improve this skill, make this skill better, run autoresearch on, self-improve skill, benchmark/eval my skill, run evals on."
 ---
 
-> **Source:** Karpathy autoresearch + SkillOpt (Microsoft Research, arxiv:2605.23904) + howtoeval.com (Ben Hylak, May 2026). See `references/structured-edits.md` for edit op spec, `references/eval-guide.md` for eval writing (including refusal evals, trajectory evals, and golden cases), `references/pitfalls.md` for known failure modes, `references/self-diagnostics.md` for the diagnostic capture protocol, `references/skillopt-architecture.md` for the SkillOpt comparison and roadmap, `references/dashboard-and-data-formats.md` for the dashboard spec and artifact schemas, `references/worked-example.md` for a full run walkthrough and operational tips, `references/mutation-principles.md` for how to mutate well.
+> **Source:** Karpathy autoresearch + SkillOpt (Microsoft Research, arxiv:2605.23904) + GEPA reflective prompt evolution (Agrawal et al., arxiv:2507.19457) + howtoeval.com (Ben Hylak, May 2026). See `references/structured-edits.md` for edit op spec, `references/eval-guide.md` for eval writing (including refusal evals, trajectory evals, and golden cases), `references/pitfalls.md` for known failure modes, `references/self-diagnostics.md` for the diagnostic capture protocol, `references/skillopt-architecture.md` for the SkillOpt comparison and roadmap, `references/pareto-selection.md` for GEPA-style Pareto frontier parent selection, `references/system-aware-merge.md` for the two-parent crossover operator, `references/dashboard-and-data-formats.md` for the dashboard spec and artifact schemas, `references/worked-example.md` for a full run walkthrough and operational tips, `references/mutation-principles.md` for how to mutate well.
 
 # Skill Optimizer
 
@@ -16,9 +16,10 @@ Take any existing skill, define what "good output" looks like as binary yes/no c
 3. **Establish the baseline.** Copy the unchanged skill into the working directory, run train + validation with the target model, score it, and create the dashboard/checkpoint.
 4. **Score outputs with binary evals.** Include refusal evals and trajectory evals when the skill's failure mode depends on uncertainty or process, not just final text.
 5. **Diagnose failures.** Cluster failing outputs, self-diagnostics, and success patterns with the optimizer model.
-6. **Propose one structured edit.** Apply an append/insert_after/replace/delete mutation to the working copy only, starting with audit-found obvious fixes when they are high-confidence.
-7. **Validate before keeping.** Reject any golden-case regression and any mutation that fails to improve held-out validation. Keep only measured improvements; log all rejects.
-8. **Repeat, then seal it.** Use the rejected-edit buffer and slow updates until plateau/budget/user stop, then score the sealed test set once and deliver the improved file plus artifacts.
+6. **Select a parent from the Pareto frontier.** Don't always mutate the single best. Keep every candidate that's best on at least one task alive in a pool, and sample the parent weighted by tasks won (GEPA-style). See `references/pareto-selection.md`.
+7. **Propose one change.** Either a structured edit (append/insert_after/replace/delete) on the sampled parent, or — when the frontier has ≥2 members — a System Aware Merge of two frontier parents (`references/system-aware-merge.md`).
+8. **Validate before keeping.** Reject any golden-case regression and any change that fails to improve held-out validation. Keep only measured improvements (added to the pool); log all rejects.
+9. **Repeat, then seal it.** Use the rejected-edit buffer and slow updates until plateau/budget/user stop, then score the sealed test set once and deliver the single best file plus artifacts.
 
 **Output:** An improved skill copy + `results.tsv` log + `changelog.md` of every mutation attempted + a live HTML dashboard you can watch in your browser. The original SKILL.md is never overwritten.
 
@@ -178,6 +179,7 @@ Before creating anything new, check if `autoresearch-[skill-name]/` already exis
 2. Read `results.json` for full experiment history
 3. Read `rejected_edits.json` for the rejected-edit buffer
 4. Read `slow_updates.json` for longitudinal comparison history
+4b. Read `pool.json` and `score_matrix.json` to restore the candidate pool and per-task scores. If they're missing on an otherwise-valid checkpoint (a pre-Pareto run), rebuild a single-member pool from `[name].md.best` and backfill its matrix from the baseline experiment's per-eval results before continuing.
 5. Restore `[name].md` from `[name].md.best` if it no longer matches `best_skill_hash` (a prior run was interrupted mid-mutation). Resume only from the last accepted state.
 6. Tell the user: "Found existing run at experiment [N] with best val_score [X]%. Resume or start fresh?"
 7. If resume: skip baseline, load all state, continue from experiment N+1
@@ -208,8 +210,8 @@ Run the skill AS-IS before changing anything. This is experiment #0.
 5. Create `results.tsv`, `results.json`, `rejected_edits.json` (empty array), `slow_updates.json` (empty array), and `dashboard.html`. Open the dashboard. Don't create `checkpoint.json` yet (step 9).
 6. Run the skill using **only the train + validation sets** with the **target model**. Score every output against every eval. Leave the test set sealed until final evaluation (step 8).
 7. Record the baseline: `train_score` and `val_score` independently. The test set is scored once, at step 8.
-8. **Snapshot the baseline as the initial accepted best:** copy `[user-chosen-name].md` to `[user-chosen-name].md.best` and record its hash. This is the accepted state until the first KEEP.
-9. Create `checkpoint.json` now (after the `.best` snapshot), with `best_skill_hash` and the split membership (schema in [references/dashboard-and-data-formats.md](references/dashboard-and-data-formats.md)).
+8. **Snapshot the baseline as the initial accepted best AND seed the candidate pool:** copy `[user-chosen-name].md` to `[user-chosen-name].md.best` and record its hash. Create `pool.json` containing this one baseline candidate (`id: "cand_0"`, `parent_id: null`) and write its per-task training pass-rates into `score_matrix.json`. This is the accepted state and the single-member pool until the first KEEP.
+9. Create `checkpoint.json` now (after the `.best` snapshot), with `best_skill_hash`, the split membership, and `pool_ids: ["cand_0"]` (schema in [references/dashboard-and-data-formats.md](references/dashboard-and-data-formats.md)).
 
 **results.tsv format (tab-separated):**
 
@@ -225,6 +227,19 @@ experiment	train_score	val_score	max_train	max_val	status	description
 ## step 6: run the experiment loop
 
 This is the core optimization loop. Once started, run autonomously until stopped.
+
+### 6.0. select the parent from the Pareto frontier (the GEPA step)
+
+Before diagnosing or mutating, pick WHICH candidate to branch from. Do **not** default to the single highest-`val_score` candidate — that greedy choice is what gets the loop stuck in a local optimum.
+
+1. Read `score_matrix.json`: the per-task (`input_id` × `eval_name`, training set only) pass-rate of every candidate in `pool.json`. This is the diagram's Scores Matrix.
+2. Compute the **Pareto frontier**: every candidate that is the best (or tied-best) on at least one task. A candidate winning even one task survives.
+3. **Sample the parent** from the frontier, weighted by number of tasks won, tie-breaking toward smaller skill size (simplicity > coverage).
+4. On the very first experiments the pool has one candidate (the baseline), so the frontier is that candidate and this step trivially returns it — identical to the old greedy behavior. The frontier only matters once KEEPs have grown the pool.
+
+Full algorithm (frontier + weighted sampling + tie-break) in [references/pareto-selection.md](references/pareto-selection.md). Validation is never used for selection — it stays a pure accept/reject gate (6f).
+
+The rest of step 6 (diagnosis, mutation, gating) operates on the **sampled parent**, not on "the current best." Where steps below say "the working copy," read it as "a working copy seeded from the sampled parent."
 
 ### 6a. failure pattern clustering (optimizer model)
 
@@ -296,6 +311,16 @@ See [references/structured-edits.md](references/structured-edits.md) for the ful
 - If the LLM produces freeform text instead of JSON, treat the entire response as an `append` op.
 - Generate a per-edit apply report: `{op, target_preview, content_preview, status}` where status is one of: `applied`, `skipped_protected`, `skipped_not_found`, `error`.
 
+### 6c-merge. System Aware Merge (optimizer model, alternative to 6a-6c)
+
+Mutation branches from ONE parent. When the Pareto frontier has **≥2 distinct members**, with probability ~0.3 skip the 6a→6c mutation path and instead produce the child by **merging two frontier parents** section-by-section.
+
+1. Sample 2 distinct candidates A and B from the frontier (same task-win weighting as 6.0).
+2. Split each SKILL.md into sections by `##`/`###` headings. For each section: if it evolved (differs from `SKILL.md.baseline`) in exactly one parent, take that parent's version; if both evolved it, ask the optimizer model to merge the two variants; if neither, keep the baseline version.
+3. The merged child is a candidate like any other: it passes through the same regression guard (6e) and validation gate (6f), and a discard goes to the rejected-edit buffer tagged `"strategy": "merge"`.
+
+Never recombine the SLOW_UPDATE protected region — the merged child inherits that block verbatim from the higher-`val_score` parent. Full algorithm and the optimizer merge prompt: [references/system-aware-merge.md](references/system-aware-merge.md).
+
 ### 6d. apply edits and run training set (target model)
 
 1. Apply the structured edits to `[user-chosen-name].md` with protected-region checks.
@@ -339,9 +364,11 @@ Track per-eval pass history across experiments so you always know what was passi
 Run the updated skill on **validation inputs** using the **target model**. Score every output.
 
 **Keep/discard decision based on validation score:**
-- Val score improved over previous best → **KEEP.** Update the working copy as the new best, then snapshot it: copy `[user-chosen-name].md` to `[user-chosen-name].md.best` and record its hash in `checkpoint.json` as `best_skill_hash`. This is the validated state an interrupted resume restores from (see step 3).
-- Val score stayed the same → **DISCARD.** Revert working copy. The change added complexity without measurable improvement on held-out data.
-- Val score got worse → **DISCARD.** Revert working copy.
+- Val score improved over the **sampled parent's** val score → **KEEP.** Add the new candidate to `pool.json` (with its `parent_id`, or `parents` pair for a merge, its per-task matrix slice, and train/val scores) and write its per-task training results into `score_matrix.json`. If it is also the highest-`val_score` candidate seen so far, snapshot it as the global best: copy `[user-chosen-name].md` to `[user-chosen-name].md.best` and record its hash in `checkpoint.json` as `best_skill_hash`. The pool is what 6.0 samples from; `.best` is only the single artifact delivered at the end.
+- Val score stayed the same → **DISCARD.** Revert the working copy to the sampled parent. The change added complexity without measurable improvement on held-out data.
+- Val score got worse → **DISCARD.** Revert the working copy to the sampled parent.
+
+Comparing against the **sampled parent** (not the global best) is what lets a non-best frontier candidate improve along its own lineage: a child only needs to beat the parent it branched from to earn a place in the pool.
 
 ### 6g. handle discard: rejected-edit buffer
 
@@ -369,8 +396,9 @@ After every experiment (kept or discarded):
 1. Append to `results.tsv`
 2. Update `results.json` (dashboard data)
 3. Update `rejected_edits.json` (if discarded)
-4. Update `checkpoint.json`: `{last_experiment, best_val_score, best_experiment, slow_update_count, best_skill_hash, split}` (keep the persisted split membership intact across saves)
-5. Append to `changelog.md` (see step 7)
+4. Update `pool.json` and `score_matrix.json` (if kept — the candidate and its per-task scores join the pool that 6.0 samples from)
+5. Update `checkpoint.json`: `{last_experiment, best_val_score, best_experiment, slow_update_count, best_skill_hash, split, pool_ids}` (keep the persisted split membership and pool intact across saves)
+6. Append to `changelog.md` (see step 7)
 
 ### 6i. slow update (every 5 experiments)
 
@@ -496,10 +524,11 @@ A good optimization run:
 2. **Used binary evals only** -- no scales, no vibes, no "rate this 1-10"
 3. **Split the data** -- training, validation, and (ideally) test sets are separate
 4. **Used structured edits** -- every mutation is a typed operation with a target, not freeform rewriting
-5. **Tracked rejections** -- the rejected-edit buffer prevented repeating failed approaches
-6. **Checked for regressions** -- both per-experiment (regression guard) and longitudinally (slow update)
-7. **Kept a complete log** -- every experiment recorded, kept or discarded, with edit ops and apply reports
-8. **Improved the honest score** -- test set score improved, not just training or validation
-9. **Ran autonomously** -- didn't stop to ask permission between experiments
+5. **Selected parents by Pareto frontier** -- branched from per-task winners sampled by tasks won, not always the single average-best (GEPA), so the search didn't collapse into one lineage
+6. **Tracked rejections** -- the rejected-edit buffer prevented repeating failed approaches
+7. **Checked for regressions** -- both per-experiment (regression guard) and longitudinally (slow update)
+8. **Kept a complete log** -- every experiment recorded, kept or discarded, with edit ops and apply reports
+9. **Improved the honest score** -- test set score improved, not just training or validation
+10. **Ran autonomously** -- didn't stop to ask permission between experiments
 
 If the skill "passes" all evals but the actual output quality hasn't improved, the evals are bad, not the skill. Go back to step 2 and write better evals.

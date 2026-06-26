@@ -183,6 +183,22 @@ All 3 go through Steps 4-5. The winner (highest val score) advances.
 Population mode costs ~3x tokens but converges faster when multiple independent
 issues exist. Use single mode when there's one clear dominant failure.
 
+### Carry the population forward as a Pareto pool (GEPA)
+
+By default population mode collapses to one winner per iteration and discards the
+rest. Don't. Keep every candidate that's **best on at least one eval case** alive
+in a pool across iterations, and pick the parent to mutate by sampling that Pareto
+frontier (weighted by cases won), instead of always mutating the single best.
+
+Why: the average-best candidate can be terrible on the one hard case that a
+lower-average candidate nails. Mutating only the average-best never gives the loop
+the substrate to learn that case. Keeping per-case winners alive is what escapes the
+local optimum. Record per-(case, dimension) scores in a small matrix keyed by
+candidate id; a candidate is on the frontier if it's the top scorer on any cell.
+The full frontier + weighted-sampling algorithm lives in the `skill-improver` skill's
+`references/pareto-selection.md` — reuse it rather than reinventing. A merge of two
+frontier candidates (mutation recipe #11) consolidates their wins in one step.
+
 ### Mutation Recipes
 
 See `references/mutation-playbook.md` for the full catalog. Common ones:

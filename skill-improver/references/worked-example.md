@@ -70,6 +70,39 @@ Val improved +25 points but test only +15 — some val-specific optimization, bu
 
 ---
 
+## micro-example: why Pareto selection beats greedy
+
+A 4-task training matrix after 3 KEEPs (values are pass-rates):
+
+```
+              cand_1   cand_2   cand_3
+task A          1.0      0.5      0.0
+task B          1.0      0.5      0.0
+task C          0.0      0.0      1.0      ← only cand_3 solves C
+task D          1.0      0.0      0.0
+val_score       75%      40%      45%
+```
+
+**Greedy** always mutates `cand_1` (highest val). But `cand_1` scores 0 on task C and
+nothing in its lineage has ever solved C, so mutating it explores around a point that
+structurally can't reach C. The loop plateaus at "good on A, B, D; blind on C."
+
+**Pareto** computes the frontier = per-task winners = {cand_1 (wins A, B, D), cand_3
+(wins C)}. cand_2 is *not* on the frontier — it never tops any task (cand_1 beats it on
+A, B, D and cand_3 owns C), so it's correctly dropped from selection. Sampling weighted
+by tasks won picks cand_1 most of the time (3 wins, ~0.75) but picks cand_3 ~1/4 of the
+time (1 win). When cand_3 is the parent, a mutation can improve C's neighbors; better,
+once the frontier has ≥2 members a **System Aware Merge** of cand_1 and cand_3 takes
+cand_1's A/B/D sections and cand_3's C-solving section in one step, producing a child
+strong on all four tasks. That consolidation is impossible for greedy, which never had
+cand_3 in the lineage to merge from.
+
+The lesson: the single average-best is a local optimum; the candidate that owns the one
+hard task is the escape route, and you only keep it reachable by holding the whole
+frontier in the pool.
+
+---
+
 ## operational tips
 
 **Cross-model setup:** Default is Config A: opus as optimizer (current session), gpt-5.5 as target. For the target model, use `hermes chat -q` with a `--model` flag **and load the working candidate copy explicitly with `-s [user-chosen-name].md`** (the Hermes CLI loads skills separately from the model switch; if you omit `-s`, the rollout runs with the installed original skill, not your mutation, and the validation gate silently measures the wrong thing). Alternatively delegate to a subagent with the target model and the candidate skill path specified. To flip it (Config B: gpt optimizes, opus executes), tell the user to start the session on gpt-5.5 and set opus as target. Config C (same model) skips cross-architecture entirely. The optimizer makes ~2 calls per experiment (analysis + edit proposal). The target makes ~N x runs calls per experiment (rollouts). Cost difference is small.
