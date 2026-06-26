@@ -3,7 +3,7 @@ name: skill-improver
 description: "Eval-driven skill optimizer: runs a skill repeatedly, scores outputs against binary evals, mutates the prompt via structured edits, and keeps only changes that improve a held-out validation score (cross-model optimizer/target, three-way splits, golden cases, checkpoint resume). Use when: optimize/improve this skill, make this skill better, run autoresearch on, self-improve skill, benchmark/eval my skill, run evals on."
 ---
 
-> **Source:** Karpathy autoresearch + SkillOpt (Microsoft Research, arxiv:2605.23904) + GEPA reflective prompt evolution (Agrawal et al., arxiv:2507.19457) + howtoeval.com (Ben Hylak, May 2026). See `references/structured-edits.md` for edit op spec, `references/eval-guide.md` for eval writing (including refusal evals, trajectory evals, and golden cases), `references/pitfalls.md` for known failure modes, `references/self-diagnostics.md` for the diagnostic capture protocol, `references/skillopt-architecture.md` for the SkillOpt comparison and roadmap, `references/pareto-selection.md` for GEPA-style Pareto frontier parent selection, `references/system-aware-merge.md` for the two-parent crossover operator, `references/dashboard-and-data-formats.md` for the dashboard spec and artifact schemas, `references/worked-example.md` for a full run walkthrough and operational tips, `references/mutation-principles.md` for how to mutate well.
+> **Source:** Karpathy autoresearch + SkillOpt (Microsoft Research, arxiv:2605.23904) + GEPA reflective prompt evolution (Agrawal et al., arxiv:2507.19457) + Meta-Harness end-to-end harness optimization (Lee et al., arxiv:2603.28052) + howtoeval.com (Ben Hylak, May 2026). See `references/structured-edits.md` for edit op spec, `references/eval-guide.md` for eval writing (including refusal evals, trajectory evals, and golden cases), `references/pitfalls.md` for known failure modes, `references/self-diagnostics.md` for the diagnostic capture protocol, `references/skillopt-architecture.md` for the SkillOpt comparison and roadmap, `references/pareto-selection.md` for GEPA-style Pareto frontier parent selection, `references/system-aware-merge.md` for the two-parent crossover operator, `references/meta-harness-proposer.md` for the full-trace filesystem-browsing edit proposer, `references/dashboard-and-data-formats.md` for the dashboard spec and artifact schemas, `references/worked-example.md` for a full run walkthrough and operational tips, `references/mutation-principles.md` for how to mutate well.
 
 # Skill Optimizer
 
@@ -15,7 +15,7 @@ Take any existing skill, define what "good output" looks like as binary yes/no c
 2. **Gather the eval setup.** Confirm 8-12 test inputs, 3-6 binary evals, model config, run count, budget cap, and golden cases. Split inputs into train/validation/test.
 3. **Establish the baseline.** Copy the unchanged skill into the working directory, run train + validation with the target model, score it, and create the dashboard/checkpoint.
 4. **Score outputs with binary evals.** Include refusal evals and trajectory evals when the skill's failure mode depends on uncertainty or process, not just final text.
-5. **Diagnose failures.** Cluster failing outputs, self-diagnostics, and success patterns with the optimizer model.
+5. **Diagnose failures from full traces.** Let the optimizer browse the per-candidate execution traces (every tool call, every turn, the exact divergence step) plus scores and source, and cite where each failing run went wrong (Meta-Harness), instead of getting a compressed "which eval failed" summary. See `references/meta-harness-proposer.md`.
 6. **Select a parent from the Pareto frontier.** Don't always mutate the single best. Keep every candidate that's best on at least one task alive in a pool, and sample the parent weighted by tasks won (GEPA-style). See `references/pareto-selection.md`.
 7. **Propose one change.** Either a structured edit (append/insert_after/replace/delete) on the sampled parent, or — when the frontier has ≥2 members — a System Aware Merge of two frontier parents (`references/system-aware-merge.md`).
 8. **Validate before keeping.** Reject any golden-case regression and any change that fails to improve held-out validation. Keep only measured improvements (added to the pool); log all rejects.
@@ -179,7 +179,7 @@ Before creating anything new, check if `autoresearch-[skill-name]/` already exis
 2. Read `results.json` for full experiment history
 3. Read `rejected_edits.json` for the rejected-edit buffer
 4. Read `slow_updates.json` for longitudinal comparison history
-4b. Read `pool.json` and `score_matrix.json` to restore the candidate pool and per-task scores. If they're missing on an otherwise-valid checkpoint (a pre-Pareto run), rebuild a single-member pool from `[name].md.best` and backfill its matrix from the baseline experiment's per-eval results before continuing.
+4b. Read `pool.json` and `score_matrix.json` to restore the candidate pool and per-task scores, and confirm `traces/` holds the per-candidate execution traces the proposer reads. If pool/matrix are missing on an otherwise-valid checkpoint (a pre-Pareto run), rebuild a single-member pool from `[name].md.best` and backfill its matrix from the baseline experiment's per-eval results before continuing; if `traces/` is absent (a pre-Meta-Harness run), the first post-resume round captures fresh traces and the proposer falls back to the compressed summary until traces exist.
 5. Restore `[name].md` from `[name].md.best` if it no longer matches `best_skill_hash` (a prior run was interrupted mid-mutation). Resume only from the last accepted state.
 6. Tell the user: "Found existing run at experiment [N] with best val_score [X]%. Resume or start fresh?"
 7. If resume: skip baseline, load all state, continue from experiment N+1
@@ -208,7 +208,7 @@ Run the skill AS-IS before changing anything. This is experiment #0.
 3. **Copy the original SKILL.md into the working directory as `[user-chosen-name].md`** -- this is the copy you will mutate. NEVER edit the original SKILL.md. All mutations happen on this copy only.
 4. Also save `SKILL.md.baseline` in the working directory (identical to the original -- this is your revert target and slow-update comparison anchor)
 5. Create `results.tsv`, `results.json`, `rejected_edits.json` (empty array), `slow_updates.json` (empty array), and `dashboard.html`. Open the dashboard. Don't create `checkpoint.json` yet (step 9).
-6. Run the skill using **only the train + validation sets** with the **target model**. Score every output against every eval. Leave the test set sealed until final evaluation (step 8).
+6. Run the skill using **only the train + validation sets** with the **target model**. Score every output against every eval. Capture the full execution trace of every training run to `traces/cand_0/run_*.md` (same format as step 6d) — the baseline traces are what the first proposer round reads. Leave the test set sealed until final evaluation (step 8).
 7. Record the baseline: `train_score` and `val_score` independently. The test set is scored once, at step 8.
 8. **Snapshot the baseline as the initial accepted best AND seed the candidate pool:** copy `[user-chosen-name].md` to `[user-chosen-name].md.best` and record its hash. Create `pool.json` containing this one baseline candidate (`id: "cand_0"`, `parent_id: null`) and write its per-task training pass-rates into `score_matrix.json`. This is the accepted state and the single-member pool until the first KEEP.
 9. Create `checkpoint.json` now (after the `.best` snapshot), with `best_skill_hash`, the split membership, and `pool_ids: ["cand_0"]` (schema in [references/dashboard-and-data-formats.md](references/dashboard-and-data-formats.md)).
@@ -243,27 +243,17 @@ The rest of step 6 (diagnosis, mutation, gating) operates on the **sampled paren
 
 ### 6a. failure pattern clustering (optimizer model)
 
-Collect ALL failing outputs from the training set. For each failure include the **input**, the **output**, and **which evals failed** (by name) plus any self-diagnosis notes, so the optimizer fixes the actual failure instead of guessing. Send to the **optimizer model**:
+Don't pre-digest failures into a paragraph and hand the optimizer a summary. That aggressive feedback compression is exactly what Meta-Harness (arxiv 2603.28052) identifies as why text optimizers underperform on skill code: the summary tells you the failure's destination ("failed the accuracy eval"), not the wrong turn that caused it. Instead, run the **optimizer model** as a short agentic loop with file-read tools scoped to `autoresearch-[skill-name]/`, and let it investigate the full execution traces before proposing anything. Full protocol (the trace archive layout, the proposer prompt, cross-candidate comparison, cost bounds): [references/meta-harness-proposer.md](references/meta-harness-proposer.md).
 
-"Here are [N] failures. The current skill is: [skill content].
+The proposer reads, for the failing runs on the **sampled parent** (`cand_<parent_id>`):
+- `traces/cand_<parent_id>/run_*.md` — the FULL trace of each run: every tool call, every intermediate turn, retries, and the exact step where the run diverged (not just the final output).
+- `score_matrix.json` / `results.json` — per-task scores for every candidate.
+- `rejected_edits.json` — edits already tried (do not repeat these or minor variants).
+- any `cand_<id>.md` source it wants to compare against.
 
-Each failure:
-- Input: [original input]
-- Output: [output]
-- Failed evals: [names of the eval criteria that failed, and why]
-- Diagnosis (if any): [self-diagnosis from 6a.5]
+It must find the exact step each failing run went wrong, citing the trace lines that prove it, and — when a prior candidate passed an input the parent fails — diff the right run against the wrong run on that same input (the highest-signal evidence available). Then it groups failures by root-cause pattern, reports how many runs share each, and recommends the single highest-impact pattern to fix.
 
-Group them by failure pattern. For each pattern:
-(a) What went wrong
-(b) How many outputs share this pattern
-(c) What skill change would fix it
-
-Then recommend which single pattern to fix first (highest impact).
-
-Previously rejected edits (do not repeat these or minor variants), plus audit-found deterministic fixes to seed this mutation (if any; phrase them as required working-copy edits):
-[rejected-edit buffer contents; step 1 deterministic obvious fixes or empty]"
-
-Log the failure patterns in the experiment record.
+Log the failure patterns AND the cited trace evidence (file + line) in the experiment record, so a later reviewer can audit why an edit was made.
 
 ### 6a.5. post-failure self-diagnosis (target model)
 
@@ -326,7 +316,8 @@ Never recombine the SLOW_UPDATE protected region — the merged child inherits t
 1. Apply the structured edits to `[user-chosen-name].md` with protected-region checks.
 2. Log the apply report.
 3. Run the updated skill on **training inputs** using the **target model**.
-4. Score every output against every eval.
+4. **Capture the full execution trace of every run** to `traces/cand_<id>/run_<input>_r<n>.md` — the verbatim tool calls, arguments, results/errors, intermediate turns, retries, and final output, NOT a summary. This is the evidence the next round's proposer (6a) reads. Format and retention rules: [references/meta-harness-proposer.md](references/meta-harness-proposer.md). The candidate's `<id>` is assigned now (it becomes a pool member only if 6f KEEPs it; if discarded, its traces are retained for the last 3 rounds then pruned).
+5. Score every output against every eval, and record each run's per-eval verdict (with the grader's reason) into the head of its trace file so the proposer sees scores and trace together.
 
 ### 6d.5. self-diagnostics capture
 
@@ -525,10 +516,11 @@ A good optimization run:
 3. **Split the data** -- training, validation, and (ideally) test sets are separate
 4. **Used structured edits** -- every mutation is a typed operation with a target, not freeform rewriting
 5. **Selected parents by Pareto frontier** -- branched from per-task winners sampled by tasks won, not always the single average-best (GEPA), so the search didn't collapse into one lineage
-6. **Tracked rejections** -- the rejected-edit buffer prevented repeating failed approaches
-7. **Checked for regressions** -- both per-experiment (regression guard) and longitudinally (slow update)
-8. **Kept a complete log** -- every experiment recorded, kept or discarded, with edit ops and apply reports
-9. **Improved the honest score** -- test set score improved, not just training or validation
-10. **Ran autonomously** -- didn't stop to ask permission between experiments
+6. **Proposed edits from full traces** -- the optimizer read each failing run's verbatim execution trace and cited the exact step it diverged (Meta-Harness), not a compressed "which eval failed" summary
+7. **Tracked rejections** -- the rejected-edit buffer prevented repeating failed approaches
+8. **Checked for regressions** -- both per-experiment (regression guard) and longitudinally (slow update)
+9. **Kept a complete log** -- every experiment recorded, kept or discarded, with edit ops and apply reports
+10. **Improved the honest score** -- test set score improved, not just training or validation
+11. **Ran autonomously** -- didn't stop to ask permission between experiments
 
 If the skill "passes" all evals but the actual output quality hasn't improved, the evals are bad, not the skill. Go back to step 2 and write better evals.

@@ -101,6 +101,8 @@ autoresearch-[skill-name]/
 ├── slow_updates.json        # longitudinal comparison history
 ├── pool.json                # the candidate pool (every KEPT candidate + lineage)
 ├── score_matrix.json        # per-task × per-candidate pass-rates (the Scores Matrix)
+├── traces/                  # full per-run execution traces, organized by candidate
+│   └── cand_<id>/run_<input>_r<n>.md
 ├── checkpoint.json          # resume state
 ├── SKILL.md.baseline        # original skill before optimization (untouched)
 └── [user-chosen-name].md    # working copy with protected guidance section
