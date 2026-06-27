@@ -194,7 +194,12 @@ Why: the average-best candidate can be terrible on the one hard case that a
 lower-average candidate nails. Mutating only the average-best never gives the loop
 the substrate to learn that case. Keeping per-case winners alive is what escapes the
 local optimum. Record per-(case, dimension) scores in a small matrix keyed by
-candidate id; a candidate is on the frontier if it's the top scorer on any cell.
+candidate id — **using train cases only** — and put a candidate on the frontier if
+it's the top scorer on any train cell. Keep validation strictly held out: val is
+only used for the Step 6 accept/discard gate and to pick `current_best`, never to
+build the frontier or weight parent sampling. Letting val-case winners onto the
+frontier would leak the held-out set into selection and mutation (mirrors
+`skill-improver`, where selection is train-only and val stays a pure gate).
 
 **This overrides the single-winner keep path below.** When population mode is run as
 a Pareto pool, Step 5.4's "rank by val mean, the winner advances" and Step 6's
