@@ -18,6 +18,8 @@ The full transcript of one run of the skill on one input, captured verbatim, not
 
 A summary throws away the one thing the optimizer needs: the *step where the run diverged*. "Failed the accuracy eval" tells you the destination; the trace tells you the wrong turn.
 
+**Redact secrets and sensitive data before persisting.** Tool arguments and results are written verbatim and retained for cross-candidate comparison, so a skill that uses authenticated tools, private files, or customer data would otherwise leak credentials/PII into the delivered optimization directory. Before writing a trace, run tool arguments and results through a redactor: mask anything matching known secret shapes (API keys, tokens, `Authorization`/`Cookie` headers, passwords, connection strings) and any caller-declared sensitive fields, replacing the value with `[REDACTED:<kind>]`. Prefer an allowlist of fields to persist for known-sensitive tools over a denylist. The divergence-relevant structure (which tool, success/failure, error class) is preserved; only the sensitive *values* are masked.
+
 ---
 
 ## the trace archive (filesystem the proposer browses)

@@ -9,7 +9,7 @@ The full spec for the live dashboard and the artifact file formats. SKILL.md ste
 Before running any experiments, create a live HTML dashboard at `autoresearch-[skill-name]/dashboard.html` and open it in the browser.
 
 The dashboard must:
-- Auto-refresh every 10 seconds (reads from `results.json`)
+- Auto-refresh every 10 seconds, fetching **three** artifacts: `results.json` (scores/experiments), `pool.json` (candidate pool + lineage), and `score_matrix.json` (per-task pass-rates). The heatmap and pool tree below read the latter two, which are separate files — not fields in `results.json` — so the dashboard must fetch them explicitly (a missing/empty file just renders that panel empty until the first KEEP writes it).
 - Show TWO score progression lines: training score and validation score (experiment number on X axis, pass rate % on Y axis). Divergence between the two = overfitting signal.
 - Show a colored bar for each experiment: green = keep, red = discard, blue = baseline, orange = slow update
 - Show a table of all experiments with: experiment #, train_score, val_score, status, description, edit_ops applied
@@ -22,7 +22,7 @@ The dashboard must:
 - Show current status: "Running experiment [N]..." or "Idle"
 - Use clean styling with soft colors (white background, pastel accents, clean sans-serif font)
 
-Generate the dashboard as a single self-contained HTML file with inline CSS and JavaScript. Use Chart.js loaded from CDN for the line chart. The JS should fetch `results.json` and re-render.
+Generate the dashboard as a single self-contained HTML file with inline CSS and JavaScript. Use Chart.js loaded from CDN for the line chart. The JS should fetch `results.json`, `pool.json`, and `score_matrix.json` on each refresh and re-render (tolerate a missing `pool.json`/`score_matrix.json` before the first KEEP).
 
 **Open it immediately** after creating it: `open dashboard.html` (macOS) so the user can see it in their browser.
 

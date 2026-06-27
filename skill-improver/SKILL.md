@@ -239,7 +239,7 @@ Before diagnosing or mutating, pick WHICH candidate to branch from. Do **not** d
 
 Full algorithm (frontier + weighted sampling + tie-break) in [references/pareto-selection.md](references/pareto-selection.md). Validation is never used for selection — it stays a pure accept/reject gate (6f).
 
-The rest of step 6 (diagnosis, mutation, gating) operates on the **sampled parent**, not on "the current best." Where steps below say "the working copy," read it as "a working copy seeded from the sampled parent."
+The rest of step 6 (diagnosis, mutation, gating) operates on the **sampled parent**, not on "the current best." Where steps below say "the working copy," read it as "a working copy seeded from the sampled parent." The sampled parent's failure outputs, diagnostics, and traces are not re-derived from the pool's pass-rate matrix — they are read from that candidate's own persisted `traces/cand_<parent_id>/` archive, which 6d wrote when the candidate was first evaluated. The retention rule (see `references/meta-harness-proposer.md`) **never prunes a pool member's traces**, so even when 6.0 samples an older non-current candidate, 6a has that parent's actual per-run failure text to diagnose from — no re-running of training is required.
 
 ### 6a. failure pattern clustering (optimizer model)
 
@@ -306,8 +306,9 @@ See [references/structured-edits.md](references/structured-edits.md) for the ful
 Mutation branches from ONE parent. When the Pareto frontier has **≥2 distinct members**, with probability ~0.3 skip the 6a→6c mutation path and instead produce the child by **merging two frontier parents** section-by-section.
 
 1. Sample 2 distinct candidates A and B from the frontier (same task-win weighting as 6.0).
-2. Split each SKILL.md into sections by `##`/`###` headings. For each section: if it evolved (differs from `SKILL.md.baseline`) in exactly one parent, take that parent's version; if both evolved it, ask the optimizer model to merge the two variants; if neither, keep the baseline version.
-3. The merged child is a candidate like any other: it passes through the same regression guard (6e) and validation gate (6f), and a discard goes to the rejected-edit buffer tagged `"strategy": "merge"`.
+2. Split each SKILL.md into sections by `##`/`###` headings (plus the YAML frontmatter as a pseudo-section). For each section: if it evolved (differs from `SKILL.md.baseline`) in exactly one parent, take that parent's version; if both evolved it, ask the optimizer model to merge the two variants; if neither, keep the baseline version; if exactly one parent deleted a baseline section, honor the deletion.
+3. **Materialize the merged child into the working copy** (`[user-chosen-name].md`) before evaluating — the merge path skips 6a→6d's structured-edit application, so nothing else writes it. Reassemble the chosen sections (in baseline heading order) and overwrite `[user-chosen-name].md` with the result, then continue at 6d step 3 (run training). Without this write, 6d would evaluate the unchanged parent / a no-op instead of the merged child.
+4. The merged child is a candidate like any other: it passes through the same regression guard (6e, against the **better** of the two parents) and validation gate (6f), and a discard goes to the rejected-edit buffer tagged `"strategy": "merge"`.
 
 Never recombine the SLOW_UPDATE protected region — the merged child inherits that block verbatim from the higher-`val_score` parent. Full algorithm and the optimizer merge prompt: [references/system-aware-merge.md](references/system-aware-merge.md).
 
@@ -340,24 +341,30 @@ Self-diagnostics also feed into refusal eval design: if the agent consistently r
 
 ### 6e. regression guard
 
-Before proceeding to validation, check for regressions on the training set:
+Before proceeding to validation, check for regressions on the training set. With Pareto selection the comparison baseline is the **sampled parent** (the lineage this child branched from in 6.0), not the global accepted-best — otherwise a child that improves a non-global frontier lineage but is still below the global best on some eval would be discarded here before the sampled-parent gate in 6f ever runs, defeating the whole point of keeping non-best lineages alive.
 
-1. Compare per-eval pass/fail against the **last ACCEPTED (kept) experiment's** pass history, not just the previous record (which may be a discarded candidate). Track per-eval pass history keyed to the accepted-best state.
-2. **Golden case check (strict):** If ANY golden case regresses on ANY eval, **discard immediately**: revert `[user-chosen-name].md` to the accepted best (`[user-chosen-name].md.best`) and log the discard reason as `"golden_case_regression"` in the rejected-edit buffer. No exceptions, regardless of net score improvement. Golden cases are the "memory of bugs you refuse to reintroduce."
-3. If any non-golden eval that was previously passing now fails on any training input: regression detected.
-4. If the net training score is lower or equal after the regression: **discard immediately** — revert `[user-chosen-name].md` to the accepted best (mandatory, or the next experiment builds on the rejected edit), skip the validation gate, and add to the rejected-edit buffer with a "regression" tag.
-5. If the net training score is still higher despite the regression: proceed to validation gate (the improvement outweighs the regression).
+1. Compare per-eval pass/fail against the **sampled parent's** per-task pass history (from its `score_matrix.json` slice), not the global accepted-best and not the previous (possibly discarded) record. For a fresh 1-candidate pool the sampled parent *is* the accepted best, so this reduces to the old behavior.
+2. **Golden case check (strict, against the global best):** Golden cases are absolute and lineage-independent. If ANY golden case regresses on ANY eval **relative to the global best**, **discard immediately**: revert `[user-chosen-name].md` to the working-copy parent it was seeded from and log the discard reason as `"golden_case_regression"` in the rejected-edit buffer. No exceptions, regardless of net score improvement. Golden cases are the "memory of bugs you refuse to reintroduce."
+3. If any non-golden eval that was passing **on the sampled parent** now fails on any training input: regression detected.
+4. If the net training score is lower or equal **versus the sampled parent** after the regression: **discard immediately** — revert `[user-chosen-name].md` to the working-copy parent it was seeded from (mandatory, or the next experiment builds on the rejected edit), skip the validation gate, and add to the rejected-edit buffer with a "regression" tag.
+5. If the net training score is still higher **than the sampled parent's** despite the regression: proceed to validation gate (the improvement outweighs the regression).
 
-Track per-eval pass history across experiments so you always know what was passing before.
+Track per-eval pass history per candidate (in `score_matrix.json`) so you always know what each parent was passing before.
 
 ### 6f. validation gate (target model)
 
 Run the updated skill on **validation inputs** using the **target model**. Score every output.
 
 **Keep/discard decision based on validation score:**
-- Val score improved over the **sampled parent's** val score → **KEEP.** Add the new candidate to `pool.json` (with its `parent_id`, or `parents` pair for a merge, its per-task matrix slice, and train/val scores) and write its per-task training results into `score_matrix.json`. If it is also the highest-`val_score` candidate seen so far, snapshot it as the global best: copy `[user-chosen-name].md` to `[user-chosen-name].md.best` and record its hash in `checkpoint.json` as `best_skill_hash`. The pool is what 6.0 samples from; `.best` is only the single artifact delivered at the end.
-- Val score stayed the same → **DISCARD.** Revert the working copy to the sampled parent. The change added complexity without measurable improvement on held-out data.
-- Val score got worse → **DISCARD.** Revert the working copy to the sampled parent.
+- Val score improved over the **sampled parent's** val score (or, for a merge, over the **better** of the two parents — the higher-`val_score` one, so a merge can't regress against its stronger parent) → **KEEP.** Then:
+  1. Assign the candidate an id and **freeze its skill text**: copy the current `[user-chosen-name].md` to the candidate's `skill_file` (e.g. `cand_3.md`). The pool schema's selection and merge steps read these frozen files, so a kept candidate must have one before the working copy is reverted or advances — otherwise sampling this pool member later can't reconstruct the exact parent.
+  2. Add it to `pool.json` (with its `parent_id`, or `parents` pair for a merge, its `skill_file`, its per-task matrix slice, and train/val scores) and write its per-task training results into `score_matrix.json`.
+  3. If it is also the highest-`val_score` candidate seen so far, snapshot it as the global best: copy `[user-chosen-name].md` to `[user-chosen-name].md.best` and record its hash in `checkpoint.json` as `best_skill_hash`.
+  4. **If it is NOT the new global best** (it only beat a lower-val sampled parent), restore the global best into the working copy before continuing: copy `[user-chosen-name].md.best` back over `[user-chosen-name].md`. The pool keeps the frozen `cand_N.md`, so nothing is lost, but the working copy / `.best` must stay the global best — later slow-update (6i) and final delivery (8) run and ship `[user-chosen-name].md`, so leaving a non-global candidate there would test/deliver the wrong artifact.
+
+  The pool is what 6.0 samples from; `.best` is only the single artifact delivered at the end.
+- Val score stayed the same → **DISCARD.** Revert the working copy to `[user-chosen-name].md.best`. The change added complexity without measurable improvement on held-out data.
+- Val score got worse → **DISCARD.** Revert the working copy to `[user-chosen-name].md.best`.
 
 Comparing against the **sampled parent** (not the global best) is what lets a non-best frontier candidate improve along its own lineage: a child only needs to beat the parent it branched from to earn a place in the pool.
 
@@ -423,7 +430,7 @@ Every 5th experiment, pause the fast loop and run a longitudinal regression chec
    Write 2-4 high-level guidance notes for the next round of optimization. These will be injected into a protected section of the skill that step-level edits cannot modify."
 
 5. Write the guidance into the working skill copy between `<!-- SLOW_UPDATE_START -->` and `<!-- SLOW_UPDATE_END -->` markers. If these markers don't exist yet, add them at the end of the skill.
-6. **Gate the guidance like any other mutation.** Re-score train and validation independently. Keep the guidance only if train improves and validation doesn't regress; otherwise revert it (or remove it on the first slow update) and log `"rejected"` in `slow_updates.json`. Update `[user-chosen-name].md.best`/`best_skill_hash` if kept.
+6. **Gate the guidance like any other mutation.** Re-score train and validation independently. Keep the guidance only if train improves and validation doesn't regress; otherwise revert it (or remove it on the first slow update) and log `"rejected"` in `slow_updates.json`. If kept, update `[user-chosen-name].md.best`/`best_skill_hash` **and register the accepted skill as a pool candidate**: freeze it to a `cand_N.md`, add it to `pool.json` (with `parent_id` = the best it was built on and `"strategy": "slow_update"`), and write its per-task training results into `score_matrix.json`. Otherwise the delivered best becomes a skill absent from the pool, and the next 6.0 selection or merge can't sample or score the actual current best.
 7. Each accepted slow update overwrites the previous guidance (not accumulating).
 8. Log to `slow_updates.json`.
 

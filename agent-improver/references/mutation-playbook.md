@@ -266,11 +266,22 @@ in candidate B, in a single step. This is GEPA's second proposal strategy (the o
 recipe here that takes two parents instead of one).
 
 **Technique:**
+- **Prerequisite — snapshot a frozen baseline first.** This recipe's per-section
+  "did it evolve" test compares each parent against a stable baseline `SKILL.md`. The
+  agent-improver flow records baseline *metrics* (`eval_results/baseline.json`) and
+  keeps advancing `current_best/SKILL.md`, but never freezes the baseline *skill text*.
+  Before enabling System Aware Merge, copy the original skill to a frozen
+  `current_best/SKILL.md.baseline` (once, at Step 1) and never overwrite it. Without it,
+  after the best has moved the loop can't tell whether A evolved, B evolved, or both,
+  and picks the wrong section.
 - Sample 2 distinct frontier candidates A and B (weighted by cases won).
-- Split each SKILL.md into sections by `##`/`###` headings.
-- For each section: if it evolved (differs from baseline) in exactly one parent,
-  take that parent's version; if both evolved it, ask the optimizer model to merge
-  the two variants without contradiction; if neither, keep the baseline version.
+- Split each SKILL.md into sections by `##`/`###` headings (treat the frontmatter
+  preamble as one section too).
+- For each section: if it evolved (differs from the frozen baseline) in exactly one
+  parent, take that parent's version; if both evolved it, ask the optimizer model to
+  merge the two variants without contradiction; if neither, keep the baseline version;
+  if exactly one parent deleted a baseline section, honor the deletion.
+- Materialize the merged sections into the working `SKILL.md` before re-eval.
 - The merged child is a candidate like any other: it passes the Step 4 constraint
   check and Step 5 re-eval. Discard if it doesn't beat its better parent on val.
 

@@ -195,9 +195,28 @@ lower-average candidate nails. Mutating only the average-best never gives the lo
 the substrate to learn that case. Keeping per-case winners alive is what escapes the
 local optimum. Record per-(case, dimension) scores in a small matrix keyed by
 candidate id; a candidate is on the frontier if it's the top scorer on any cell.
+
+**This overrides the single-winner keep path below.** When population mode is run as
+a Pareto pool, Step 5.4's "rank by val mean, the winner advances" and Step 6's
+"update `current_best/SKILL.md` with the winning mutation" no longer collapse the
+population to one survivor. Instead, on each iteration: keep **every** candidate that
+is best on ≥1 eval cell into the pool, persist each kept candidate's frozen
+`SKILL.md` (e.g. `pool/cand_N/SKILL.md`) and its per-cell score row in the matrix,
+and sample the next parent from the frontier. `current_best/SKILL.md` still tracks
+the single highest-val-mean candidate for delivery, but it is no longer the only
+thing carried into the next iteration — the pool is. A lower-average candidate that
+wins a specific case is kept, not discarded.
+
 The full frontier + weighted-sampling algorithm lives in the `skill-improver` skill's
 `references/pareto-selection.md` — reuse it rather than reinventing. A merge of two
 frontier candidates (mutation recipe #11) consolidates their wins in one step.
+
+> **Packaging dependency.** The Pareto algorithm (`pareto-selection.md`) and the
+> merge prompt (`system-aware-merge.md`) physically live under `skill-improver/references/`,
+> not `agent-improver/references/`. If you install or package `agent-improver` on its
+> own, copy or symlink those two reference docs into `agent-improver/references/` (or
+> vendor the algorithm inline) so this skill is self-contained — otherwise the GEPA
+> pool/merge steps reference docs that aren't present.
 
 ### Mutation Recipes
 

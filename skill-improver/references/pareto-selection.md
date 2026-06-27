@@ -44,6 +44,12 @@ def pareto_frontier(matrix):
         for c in matrix:
             if matrix[c].get(task, 0.0) == best:
                 frontier.add(c)
+    # Degenerate case: every cell is 0.0 (e.g. a fresh baseline that fails all
+    # binary evals). No task yields a winner, so the frontier would be empty and
+    # downstream sampling would have nothing to pick. Fall back to the whole pool
+    # (typically just the baseline) so the loop can still mutate something.
+    if not frontier:
+        return set(matrix)
     return frontier
 ```
 
@@ -57,6 +63,7 @@ From the frontier, sample the mutation parent **weighted by how many tasks it wi
 
 ```python
 import random
+import math
 
 def sample_parent(matrix, frontier, prefer_smaller_size=None):
     wins = {c: 0 for c in frontier}
@@ -70,13 +77,23 @@ def sample_parent(matrix, frontier, prefer_smaller_size=None):
             wins[c] += 1.0 / len(winners)   # split credit on ties
     parents = list(wins)
     weights = [wins[c] for c in parents]
-    # tie-break toward smaller skills (simplicity > coverage)
+    # Degenerate pool: no task had a positive winner (e.g. a fresh baseline that
+    # fails every binary eval) -> every weight is 0 and random.choices would raise.
+    # Fall back to uniform sampling over the pool so the loop can still mutate.
+    if not parents or sum(weights) == 0:
+        parents = list(matrix) or list(frontier)
+        weights = [1.0] * len(parents)
+    # Tie-break toward smaller skills (simplicity > coverage), but only GENTLY:
+    # divide by a log of the size so a 5x-bigger candidate is ~ (ln 15k / ln 1k)
+    # = ~1.4x penalized, not 15x. Dividing by the raw byte size lets prompt length
+    # dominate the win count and starves the broad frontier parent.
     if prefer_smaller_size:
-        weights = [w / max(1, prefer_smaller_size[c]) for c, w in zip(parents, weights)]
+        weights = [w / math.log(max(math.e, prefer_smaller_size[c]))
+                   for c, w in zip(parents, weights)]
     return random.choices(parents, weights=weights, k=1)[0]
 ```
 
-**Tie-break toward smaller skills.** When weights are close, bias toward the candidate with the smaller SKILL.md byte size. Matches the standing simplicity-over-coverage preference and stops the pool from drifting toward bloated prompts that won by accretion.
+**Tie-break toward smaller skills.** When weights are close, bias toward the candidate with the smaller SKILL.md byte size — but as a *gentle* log-scaled tie-break, not a raw size division. Dividing the win weight by the raw byte size (typically thousands) makes size dominate selection: a 1-win 1KB candidate would outweigh a 4-win 5KB one. Scaling by `log(size)` keeps it a mild bias that preserves the simplicity-over-coverage preference without overriding task wins.
 
 ---
 
@@ -85,7 +102,7 @@ def sample_parent(matrix, frontier, prefer_smaller_size=None):
 - **Golden cases are orthogonal.** Frontier membership never exempts a candidate from the golden-case gate. A mutation that regresses any golden case is still discarded instantly (6e), regardless of which parent produced it.
 - **Rejected-edit buffer still applies.** The buffer is injected into the failure-clustering prompt as before. Pareto changes *which parent* you mutate, not *which edits* you've already ruled out.
 - **The delivered artifact is still the single best.** `.best` / `best_skill_hash` remain the highest-`val_score` candidate. The pool exists only to feed selection; at the end you ship the one best skill, not the pool.
-- **Degenerate case = today's behavior.** With a 1-candidate pool (the baseline, before any KEEP), the frontier is that one candidate and selection trivially returns it. So a fresh run behaves exactly like the old greedy loop until the pool grows. Fully backward-compatible.
+- **Degenerate case = today's behavior.** With a 1-candidate pool (the baseline, before any KEEP), the frontier is that one candidate and selection trivially returns it. So a fresh run behaves exactly like the old greedy loop until the pool grows. Fully backward-compatible. The same fallback covers an all-zero score matrix (a baseline that fails every binary eval): no task has a winner, so `pareto_frontier` returns the whole pool and `sample_parent` samples it uniformly instead of crashing on an empty frontier.
 
 ---
 
