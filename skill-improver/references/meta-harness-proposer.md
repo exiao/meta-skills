@@ -73,7 +73,7 @@ Instead of pre-digesting failures into a summary and handing the optimizer a par
 >
 > You may use validation only as an opaque accept/reject signal already reflected in keep/discard status. Do not read validation outputs, validation traces, validation grader reasons, or per-validation-case failures; if a file contains those details, it is outside your context.
 >
-> Investigate before proposing. Read the traces of the failing runs on the current parent (`cand_<parent_id>`). Find the exact step where each run went wrong, not just that it failed. When useful, compare against a trace where an ancestor candidate got the same input RIGHT — the diff between a right run and a wrong run on the same input is the highest-signal evidence you have.
+> Investigate before proposing. Read the traces of the failing runs on the current parent (`cand_<sampled_id>`, where `sampled_id` is the candidate id returned by frontier sampling, not a child's `parent_id` lineage field). Find the exact step where each run went wrong, not just that it failed. When useful, compare against a trace where an ancestor candidate got the same input RIGHT — the diff between a right run and a wrong run on the same input is the highest-signal evidence you have.
 >
 > Then produce: (a) for each failure cluster, the specific step/decision that caused it and the trace lines that prove it; (b) one structured edit (see structured-edits.md) that fixes the highest-impact cluster, justified by the trace evidence you cited."
 
