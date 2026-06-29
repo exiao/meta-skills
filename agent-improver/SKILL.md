@@ -186,7 +186,7 @@ issues exist. Use single mode when there's one clear dominant failure.
 ### Carry the population forward as a Pareto pool (GEPA)
 
 By default population mode collapses to one winner per iteration and discards the
-rest. Don't. Keep every candidate that's **best on at least one eval case** alive
+rest. Don't. Keep every validation-accepted candidate that's **best on at least one train eval case** alive
 in a pool across iterations, and pick the parent to mutate by sampling that Pareto
 frontier (weighted by cases won), instead of always mutating the single best.
 
@@ -201,16 +201,22 @@ build the frontier or weight parent sampling. Letting val-case winners onto the
 frontier would leak the held-out set into selection and mutation (mirrors
 `skill-improver`, where selection is train-only and val stays a pure gate).
 
-**This overrides the single-winner keep path below.** When population mode is run as
-a Pareto pool, Step 5.4's "rank by val mean, the winner advances" and Step 6's
-"update `current_best/SKILL.md` with the winning mutation" no longer collapse the
-population to one survivor. Instead, on each iteration: keep **every** candidate that
-is best on ≥1 eval cell into the pool, persist each kept candidate's frozen
-`SKILL.md` (e.g. `pool/cand_N/SKILL.md`) and its per-cell score row in the matrix,
-and sample the next parent from the frontier. `current_best/SKILL.md` still tracks
-the single highest-val-mean candidate for delivery, but it is no longer the only
-thing carried into the next iteration — the pool is. A lower-average candidate that
-wins a specific case is kept, not discarded.
+**This overrides the single-winner keep path below, but not the validation gate.**
+When population mode is run as a Pareto pool, Step 5.4's "rank by val mean, the
+winner advances" and Step 6's "update `current_best/SKILL.md` with the winning
+mutation" no longer collapse the population to one survivor. Instead, on each
+iteration: first run the normal Step 6 val comparison for every train-frontier
+candidate, and add a candidate to the pool **only if it passes the Step 6 validation
+acceptance gate** (improves beyond the configured threshold versus its parent/current
+comparison point and does not regress held-out validation). A candidate that wins one
+train cell but fails validation is logged as rejected and is not eligible for future
+parent sampling. For each accepted candidate, persist its frozen `SKILL.md` (e.g.
+`pool/cand_N/SKILL.md`) and its train per-cell score row in the matrix, then sample
+the next parent from the frontier of that validation-accepted pool. `current_best/SKILL.md`
+still tracks the single highest-val-mean candidate for delivery, but it is no longer
+the only thing carried into the next iteration — the validation-accepted pool is. A
+lower-average candidate that wins a specific train case is kept only after it passes
+the same validation acceptance check as any other mutation.
 
 The full frontier + weighted-sampling algorithm lives in the `skill-improver` skill's
 `references/pareto-selection.md` — reuse it rather than reinventing. A merge of two

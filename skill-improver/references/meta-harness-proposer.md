@@ -1,6 +1,6 @@
 # Meta-Harness Proposer (full-trace, filesystem-browsing edit proposal)
 
-GEPA's reflection step (6a/6a.5) is *compressed*: the optimizer sees the input, the final output, the names of failed evals, and a one-line self-diagnosis. It never sees WHERE in the run the skill went wrong. Meta-Harness (Lee et al. 2026, arxiv 2603.28052) shows that this aggressive feedback compression is exactly what makes text optimizers underperform on harness/skill code. Their fix: give the proposer **filesystem access to the source, scores, and full execution traces of every prior candidate**, and let it browse that evidence agentically before proposing a change.
+GEPA's reflection step (6a/6a.5) is *compressed*: the optimizer sees the input, the final output, the names of failed evals, and a one-line self-diagnosis. It never sees WHERE in the run the skill went wrong. Meta-Harness (Lee et al. 2026, arxiv 2603.28052) shows that this aggressive feedback compression is exactly what makes text optimizers underperform on harness/skill code. Their fix: give the proposer **filesystem access to the source, training/selector scores, and full training execution traces of prior candidates**, and let it browse that evidence agentically before proposing a change. Held-out validation evidence stays outside this browsing context and is used only by the accept/reject gate.
 
 This reference defines how skill-improver implements that. It REPLACES the compressed 6a→6c summary path with a trace-grounded proposer. SKILL.md step 6a/6c point here.
 
@@ -24,7 +24,7 @@ A summary throws away the one thing the optimizer needs: the *step where the run
 
 ## the trace archive (filesystem the proposer browses)
 
-Every run writes a trace file. Traces are organized by candidate so the proposer can read across the whole search history, not just this round:
+Every **training/selector** run writes a trace file. Traces are organized by candidate so the proposer can read across the whole train-side search history, not just this round. Validation run traces are never exposed to the proposer; if they are captured for debugging, keep them outside this archive and never include them in proposer context:
 
 ```
 autoresearch-[skill-name]/
@@ -63,13 +63,15 @@ Mark the divergence line when the self-diagnosis or grader reason localizes it; 
 
 ## the agentic proposer (replaces the 6a summary prompt)
 
-Instead of pre-digesting failures into a summary and handing the optimizer a paragraph, give the **optimizer model** read access to the archive and let it investigate. The proposer runs as a short agentic loop with file-read tools scoped to `autoresearch-[skill-name]/`:
+Instead of pre-digesting failures into a summary and handing the optimizer a paragraph, give the **optimizer model** read access to the train-side archive and let it investigate. The proposer runs as a short agentic loop with file-read tools scoped to a validation-redacted view of `autoresearch-[skill-name]/`:
 
 > "You are improving a skill. You have read access to this run's working directory:
 > - `[user-chosen-name].md` and `cand_<id>.md` — the source of every candidate
-> - `score_matrix.json`, `results.json` — per-task scores for every candidate
-> - `traces/cand_<id>/run_*.md` — the FULL execution trace of every run, including tool calls, intermediate reasoning, and the exact step where each failing run diverged
+> - `score_matrix.json` and `proposer_context.json` — train/selector per-task scores, lineage, and keep/discard history with validation details redacted
+> - `traces/cand_<id>/run_*.md` — the FULL execution trace of every training/selector run, including tool calls, intermediate reasoning, and the exact step where each failing run diverged
 > - `rejected_edits.json` — edits already tried and rejected (do not repeat)
+>
+> You may use validation only as an opaque accept/reject signal already reflected in keep/discard status. Do not read validation outputs, validation traces, validation grader reasons, or per-validation-case failures; if a file contains those details, it is outside your context.
 >
 > Investigate before proposing. Read the traces of the failing runs on the current parent (`cand_<parent_id>`). Find the exact step where each run went wrong, not just that it failed. When useful, compare against a trace where an ancestor candidate got the same input RIGHT — the diff between a right run and a wrong run on the same input is the highest-signal evidence you have.
 >
@@ -87,7 +89,7 @@ The single most valuable read is **the same input under two candidates with diff
 
 The summary path (old 6a) is cheaper per round but structurally blind: it can fix "the output was wrong" but not "the skill told the agent to call the tool before reading the input, so it always has stale data." The latter is a *process* bug visible only in the trace's tool ordering. Process bugs are where skills actually fail in production, which is exactly why trajectory evals exist; the proposer needs trajectory-level evidence to fix them.
 
-**Cost control:** reading full traces costs optimizer tokens. Bound it: cap the proposer at reading traces for the failing runs of the current parent plus at most 3 cross-candidate comparison pairs per round. If a run's trace exceeds ~2k tokens, the capture step should keep the tool-call/result spine and the turns around the marked divergence, dropping long verbatim tool payloads (store those truncated with a `[...truncated N chars...]` marker). Never drop the divergence window.
+**Cost control:** reading full traces costs optimizer tokens. Bound it: cap the proposer at reading train-side traces for the failing runs of the current parent plus at most 3 cross-candidate comparison pairs per round. If a run's trace exceeds ~2k tokens, the capture step should keep the tool-call/result spine and the turns around the marked divergence, dropping long verbatim tool payloads (store those truncated with a `[...truncated N chars...]` marker). Never drop the divergence window. Do not use validation traces as a cost-control shortcut; they remain sealed from the proposer regardless of size.
 
 ---
 
