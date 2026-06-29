@@ -218,16 +218,12 @@ the only thing carried into the next iteration — the validation-accepted pool 
 lower-average candidate that wins a specific train case is kept only after it passes
 the same validation acceptance check as any other mutation.
 
-The full frontier + weighted-sampling algorithm lives in the `skill-improver` skill's
+The full frontier + weighted-sampling algorithm lives in this skill's
 `references/pareto-selection.md` — reuse it rather than reinventing. A merge of two
-frontier candidates (mutation recipe #11) consolidates their wins in one step.
-
-> **Packaging dependency.** The Pareto algorithm (`pareto-selection.md`) and the
-> merge prompt (`system-aware-merge.md`) physically live under `skill-improver/references/`,
-> not `agent-improver/references/`. If you install or package `agent-improver` on its
-> own, copy or symlink those two reference docs into `agent-improver/references/` (or
-> vendor the algorithm inline) so this skill is self-contained — otherwise the GEPA
-> pool/merge steps reference docs that aren't present.
+frontier candidates (mutation recipe #11) consolidates their wins in one step; its
+self-contained prompt lives in `references/system-aware-merge.md`. Keep these
+references vendored under `agent-improver/references/` so a standalone install of
+`agent-improver/` has every GEPA pool/merge instruction it needs.
 
 ### Mutation Recipes
 

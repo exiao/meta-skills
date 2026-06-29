@@ -63,9 +63,9 @@ Mark the divergence line when the self-diagnosis or grader reason localizes it; 
 
 ## the agentic proposer (replaces the 6a summary prompt)
 
-Instead of pre-digesting failures into a summary and handing the optimizer a paragraph, give the **optimizer model** read access to the train-side archive and let it investigate. The proposer runs as a short agentic loop with file-read tools scoped to a validation-redacted view of `autoresearch-[skill-name]/`:
+Instead of pre-digesting failures into a summary and handing the optimizer a paragraph, give the **optimizer model** read access only to a validation-redacted proposer view and let it investigate. The proposer runs as a short agentic loop with file-read tools scoped to a directory such as `autoresearch-[skill-name]/proposer_view/`, not to the raw experiment root. Build that view from train-side candidate sources, train/selector scores, train traces, and rejected-edit history; exclude raw `results.json`, validation traces, validation grader reasons, and any per-validation-case failure details.
 
-> "You are improving a skill. You have read access to this run's working directory:
+> "You are improving a skill. You have read access to this run's `proposer_view/` directory:
 > - `[user-chosen-name].md` and `cand_<id>.md` — the source of every candidate
 > - `score_matrix.json` and `proposer_context.json` — train/selector per-task scores, lineage, and keep/discard history with validation details redacted
 > - `traces/cand_<id>/run_*.md` — the FULL execution trace of every training/selector run, including tool calls, intermediate reasoning, and the exact step where each failing run diverged
