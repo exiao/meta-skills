@@ -298,8 +298,8 @@ region.
 **Expected impact:** High when two candidates each own a distinct cluster of cases.
 Useless with a single-candidate pool (nothing to merge).
 
-Full algorithm and the optimizer merge prompt: see the `skill-improver` skill's
-`references/system-aware-merge.md`.
+Full algorithm and the optimizer merge prompt: see the vendored
+[system-aware-merge.md](system-aware-merge.md) reference in this directory.
 
 ---
 
