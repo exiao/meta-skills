@@ -3,7 +3,7 @@ name: skill-improver
 description: "Eval-driven skill optimizer: runs a skill repeatedly, scores outputs against binary evals, mutates the prompt via structured edits, and keeps only changes that improve a held-out validation score (cross-model optimizer/target, three-way splits, golden cases, checkpoint resume). Use when: optimize/improve this skill, make this skill better, run autoresearch on, self-improve skill, benchmark/eval my skill, run evals on."
 ---
 
-> **Source:** Karpathy autoresearch + SkillOpt (Microsoft Research, arxiv:2605.23904) + GEPA reflective prompt evolution (Agrawal et al., arxiv:2507.19457) + Meta-Harness end-to-end harness optimization (Lee et al., arxiv:2603.28052) + howtoeval.com (Ben Hylak, May 2026). See `references/structured-edits.md` for edit op spec, `references/eval-guide.md` for eval writing (including refusal evals, trajectory evals, and golden cases), `references/pitfalls.md` for known failure modes, `references/self-diagnostics.md` for the diagnostic capture protocol, `references/skillopt-architecture.md` for the SkillOpt comparison and roadmap, `references/pareto-selection.md` for GEPA-style Pareto frontier parent selection, `references/system-aware-merge.md` for the two-parent crossover operator, `references/meta-harness-proposer.md` for the full-trace filesystem-browsing edit proposer, `references/dashboard-and-data-formats.md` for the dashboard spec and artifact schemas, `references/worked-example.md` for a full run walkthrough and operational tips, `references/mutation-principles.md` for how to mutate well.
+> **Source:** Karpathy autoresearch + SkillOpt (Microsoft Research, arxiv:2605.23904) + Meta-Harness end-to-end harness optimization (Lee et al., arxiv:2603.28052) + howtoeval.com (Ben Hylak, May 2026). See `references/structured-edits.md` for edit op spec, `references/eval-guide.md` for eval writing (including refusal evals, trajectory evals, and golden cases), `references/pitfalls.md` for known failure modes, `references/self-diagnostics.md` for the diagnostic capture protocol, `references/skillopt-architecture.md` for the SkillOpt comparison and roadmap, `references/meta-harness-proposer.md` for the full-trace filesystem-browsing edit proposer, `references/dashboard-and-data-formats.md` for the dashboard spec and artifact schemas, `references/worked-example.md` for a full run walkthrough and operational tips, `references/mutation-principles.md` for how to mutate well.
 
 # Skill Optimizer
 
@@ -15,11 +15,10 @@ Take any existing skill, define what "good output" looks like as binary yes/no c
 2. **Gather the eval setup.** Confirm 8-12 test inputs, 3-6 binary evals, model config, run count, budget cap, and golden cases. Split inputs into train/validation/test.
 3. **Establish the baseline.** Copy the unchanged skill into the working directory, run train + validation with the target model, score it, and create the dashboard/checkpoint.
 4. **Score outputs with binary evals.** Include refusal evals and trajectory evals when the skill's failure mode depends on uncertainty or process, not just final text.
-5. **Diagnose failures from full training traces.** Let the optimizer browse the per-candidate training execution traces (every tool call, every turn, the exact divergence step) plus train/selector scores and source, while keeping validation outputs and traces sealed, and cite where each failing run went wrong (Meta-Harness), instead of getting a compressed "which eval failed" summary. See `references/meta-harness-proposer.md`.
-6. **Select a parent from the Pareto frontier.** Don't always mutate the single best. Keep every validation-accepted candidate that's best on at least one training task alive in a pool, and sample the parent weighted by train tasks won (GEPA-style). See `references/pareto-selection.md`.
-7. **Propose one change.** Either a structured edit (append/insert_after/replace/delete) on the sampled parent, or — when the frontier has ≥2 members — a System Aware Merge of two frontier parents (`references/system-aware-merge.md`).
-8. **Validate before keeping.** Reject any golden-case regression and any change that fails to improve held-out validation. Keep only measured improvements (added to the pool); log all rejects.
-9. **Repeat, then seal it.** Use the rejected-edit buffer and slow updates until plateau/budget/user stop, then score the sealed test set once and deliver the single best file plus artifacts.
+5. **Diagnose failures from full training traces.** Let the optimizer browse the per-candidate training execution traces (every tool call, every turn, the exact divergence step) plus train scores and source, while keeping validation outputs and traces sealed, and cite where each failing run went wrong (Meta-Harness), instead of getting a compressed "which eval failed" summary. See `references/meta-harness-proposer.md`.
+6. **Propose one structured edit.** Apply an append/insert_after/replace/delete mutation to the working copy only, starting with audit-found obvious fixes when they are high-confidence.
+7. **Validate before keeping.** Reject any golden-case regression and any mutation that fails to improve held-out validation. Keep only measured improvements; log all rejects.
+8. **Repeat, then seal it.** Use the rejected-edit buffer and slow updates until plateau/budget/user stop, then score the sealed test set once and deliver the improved file plus artifacts.
 
 **Output:** An improved skill copy + `results.tsv` log + `changelog.md` of every mutation attempted + a live HTML dashboard you can watch in your browser. The original SKILL.md is never overwritten.
 
@@ -179,7 +178,7 @@ Before creating anything new, check if `autoresearch-[skill-name]/` already exis
 2. Read `results.json` for full experiment history
 3. Read `rejected_edits.json` for the rejected-edit buffer
 4. Read `slow_updates.json` for longitudinal comparison history
-4b. Read `pool.json` and `score_matrix.json` to restore the candidate pool and per-task scores, and confirm `traces/` holds the per-candidate execution traces the proposer reads. If pool/matrix are missing on an otherwise-valid checkpoint (a pre-Pareto run), rebuild a single-member pool from `[name].md.best` as the resume seed (for example `cand_0` with `strategy: "resume_best"`, `experiment: best_experiment`, and `skill_file: "cand_0.md"`). Populate that seed's `score_matrix.json` row from the **best experiment's** training per-eval results if they were persisted; otherwise rerun `[name].md.best` on the recorded training split and overwrite the train-only matrix cells from those fresh scores. Never assign the original baseline's scores to a later `.best` unless the `.best` hash matches the baseline. If `traces/` is absent or missing the sampled candidate (a pre-Meta-Harness run), do a **training-only trace refresh before 6.0/6a proposes anything**: restore `[name].md.best` (or the frozen `skill_file` for each restored pool member you may sample), re-run that candidate on the recorded training split, capture `traces/cand_<id>/run_*.md`, and fill any missing train-only `score_matrix.json` cells from those runs. Do not run validation during this refresh and do not expose validation outputs; once the sampled candidate's traces exist, resume at 6.0 with trace-grounded proposal. Never let the first post-resume proposal fall back to stale summaries or empty evidence.
+4b. Confirm `traces/` holds the per-candidate execution traces the proposer reads. If `traces/` is absent or missing the best candidate (a pre-Meta-Harness run), do a **training-only trace refresh before 6a proposes anything**: restore `[name].md.best`, re-run it on the recorded training split, and capture `traces/cand_best/run_*.md`. Do not run validation during this refresh and do not expose validation outputs; once the traces exist, resume with trace-grounded proposal. Never let the first post-resume proposal fall back to stale summaries or empty evidence.
 5. Restore `[name].md` from `[name].md.best` if it no longer matches `best_skill_hash` (a prior run was interrupted mid-mutation). Resume only from the last accepted state.
 6. Tell the user: "Found existing run at experiment [N] with best val_score [X]%. Resume or start fresh?"
 7. If resume: skip baseline, load all state, continue from experiment N+1
@@ -208,10 +207,10 @@ Run the skill AS-IS before changing anything. This is experiment #0.
 3. **Copy the original SKILL.md into the working directory as `[user-chosen-name].md`** -- this is the copy you will mutate. NEVER edit the original SKILL.md. All mutations happen on this copy only.
 4. Also save `SKILL.md.baseline` in the working directory (identical to the original -- this is your revert target and slow-update comparison anchor)
 5. Create `results.tsv`, `results.json`, `rejected_edits.json` (empty array), `slow_updates.json` (empty array), and `dashboard.html`. Open the dashboard. Don't create `checkpoint.json` yet (step 9).
-6. Run the skill using **only the train + validation sets** with the **target model**. Score every output against every eval. Capture the full execution trace of every training run to `traces/cand_0/run_*.md` (same format as step 6d) — the baseline traces are what the first proposer round reads. Leave the test set sealed until final evaluation (step 8).
+6. Run the skill using **only the train + validation sets** with the **target model**. Score every output against every eval. Capture the full execution trace of every training run to `traces/cand_best/run_*.md` (same format as step 6d) — the baseline traces are what the first proposer round reads. Leave the test set sealed until final evaluation (step 8).
 7. Record the baseline: `train_score` and `val_score` independently. The test set is scored once, at step 8.
-8. **Snapshot the baseline as the initial accepted best AND seed the candidate pool:** copy `[user-chosen-name].md` to `[user-chosen-name].md.best` and record its hash. Freeze the baseline pool member's skill text by also copying it to `cand_0.md`. Create `pool.json` containing this one baseline candidate (`id: "cand_0"`, `parent_id: null`, `skill_file: "cand_0.md"`) and write its per-task training pass-rates into `score_matrix.json`. The `cand_0.md` copy is what selection/merge read once the working copy advances or is restored from another parent. This is the accepted state and the single-member pool until the first KEEP.
-9. Create `checkpoint.json` now (after the `.best` snapshot), with `best_skill_hash`, the split membership, and `pool_ids: ["cand_0"]` (schema in [references/dashboard-and-data-formats.md](references/dashboard-and-data-formats.md)).
+8. **Snapshot the baseline as the initial accepted best:** copy `[user-chosen-name].md` to `[user-chosen-name].md.best` and record its hash. This is the accepted state until the first KEEP.
+9. Create `checkpoint.json` now (after the `.best` snapshot), with `best_skill_hash` and the split membership (schema in [references/dashboard-and-data-formats.md](references/dashboard-and-data-formats.md)).
 
 **results.tsv format (tab-separated):**
 
@@ -228,34 +227,18 @@ experiment	train_score	val_score	max_train	max_val	status	description
 
 This is the core optimization loop. Once started, run autonomously until stopped.
 
-### 6.0. select the parent from the Pareto frontier (the GEPA step)
-
-Before diagnosing or mutating, pick WHICH candidate to branch from. Do **not** default to the single highest-`val_score` candidate — that greedy choice is what gets the loop stuck in a local optimum.
-
-1. Read `score_matrix.json`: the per-task (`input_id` × `eval_name`, training set only) pass-rate of every candidate in `pool.json`. This is the diagram's Scores Matrix.
-2. Compute the **Pareto frontier**: every candidate that is the best (or tied-best) on at least one task. A candidate winning even one task survives.
-3. **Sample the parent** from the frontier, weighted by number of tasks won, tie-breaking toward smaller skill size (simplicity > coverage).
-4. On the very first experiments the pool has one candidate (the baseline), so the frontier is that candidate and this step trivially returns it — identical to the old greedy behavior. The frontier only matters once KEEPs have grown the pool.
-
-Full algorithm (frontier + weighted sampling + tie-break) in [references/pareto-selection.md](references/pareto-selection.md). Validation is never used for selection — it stays a pure accept/reject gate (6f).
-
-The rest of step 6 (diagnosis, mutation, gating) operates on the **sampled parent**, not on "the current best." Where steps below say "the working copy," read it as "a working copy seeded from the sampled parent." The parent sampled by 6.0 has its own candidate `id` (call it `sampled_id`); do not confuse that with the lineage `parent_id` field stored on children in `pool.json`. The sampled candidate's failure outputs, diagnostics, and traces are not re-derived from the pool's pass-rate matrix — they are read from that candidate's own persisted `traces/cand_<sampled_id>/` archive, which 6d wrote when that candidate was first evaluated. The retention rule (see `references/meta-harness-proposer.md`) **never prunes a pool member's traces**, so even when 6.0 samples an older non-current candidate, 6a has that candidate's actual per-run failure text to diagnose from. The only exception is the resume repair in step 3.4b: if an old checkpoint lacks those traces, capture the sampled candidate's train traces before 6.0/6a, then continue.
-
 ### 6a. failure pattern clustering (optimizer model)
 
-Don't pre-digest failures into a paragraph and hand the optimizer a summary. That aggressive feedback compression is exactly what Meta-Harness (arxiv 2603.28052) identifies as why text optimizers underperform on skill code: the summary tells you the failure's destination ("failed the accuracy eval"), not the wrong turn that caused it. Instead, run the **optimizer model** as a short agentic loop with file-read tools scoped only to a proposer-readable redacted view such as `autoresearch-[skill-name]/proposer_view/`, and let it investigate the train-side execution traces before proposing anything. Do not mount or expose the raw experiment root if it contains validation rows, validation traces, grader reasons, or per-validation-case failures. Full protocol (the trace archive layout, the proposer prompt, cross-candidate comparison, cost bounds): [references/meta-harness-proposer.md](references/meta-harness-proposer.md).
+Don't pre-digest failures into a paragraph and hand the optimizer a summary. That aggressive feedback compression is exactly what Meta-Harness (arxiv 2603.28052) identifies as why text optimizers underperform on skill code: the summary tells you the failure's destination ("failed the accuracy eval"), not the wrong turn that caused it. Instead, run the **optimizer model** as a short agentic loop with file-read tools scoped only to a proposer-readable redacted view such as `autoresearch-[skill-name]/proposer_view/`, and let it investigate the train-side execution traces before proposing anything. Do not mount or expose the raw experiment root if it contains validation rows, validation traces, grader reasons, or per-validation-case failures. Full protocol (the trace archive layout, the proposer prompt, cost bounds): [references/meta-harness-proposer.md](references/meta-harness-proposer.md).
 
-The proposer reads, for the failing runs on the **sampled parent** (`sampled_id`, the candidate id returned by 6.0 — not the child's `parent_id` lineage field):
-- `traces/cand_<sampled_id>/run_*.md` — the FULL trace of each run: every tool call, every intermediate turn, retries, and the exact step where the run diverged (not just the final output).
-- `score_matrix.json` plus a proposer-safe history export — train/selector per-task scores, lineage, keep/discard status, and prior rejected edit hypotheses. Do **not** give the proposer raw `results.json` if it contains validation rows, per-validation-case failures, validation traces, or validation grader reasons.
+The proposer reads, for the failing runs on the current accepted best:
+- `traces/cand_best/run_*.md` — the FULL trace of each run: every tool call, every intermediate turn, retries, and the exact step where the run diverged (not just the final output).
+- a proposer-safe history export — train per-eval scores, keep/discard status, and prior rejected edit hypotheses. Do **not** give the proposer raw `results.json` if it contains validation rows, per-validation-case failures, validation traces, or validation grader reasons.
 - `rejected_edits.json` — edits already tried (do not repeat these or minor variants).
-- any `cand_<id>.md` source it wants to compare against.
 
-Validation remains an accept/reject gate only: 6f may record aggregate validation scores for the dashboard/checkpoint, but validation outputs, validation traces, and validation failure reasons must not enter the proposer-readable archive. If `results.json` is the dashboard source of truth, generate a separate train-only `proposer_context.json` plus copied/symlinked train traces inside `proposer_view/`, then scope the proposer's file-read tools to that redacted directory. Do not grant the proposer access to the raw `autoresearch-[skill-name]/` root, because adjacent dashboard/checkpoint artifacts can contain held-out validation details even when `proposer_context.json` itself is clean.
+Validation remains an accept/reject gate only: 6f may record aggregate validation scores for the dashboard/checkpoint, but validation outputs, validation traces, and validation failure reasons must not enter the proposer-readable archive. Generate a train-only `proposer_context.json` plus copied/symlinked train traces inside `proposer_view/`, then scope the proposer's file-read tools to that redacted directory. Do not grant the proposer access to the raw `autoresearch-[skill-name]/` root, because adjacent dashboard/checkpoint artifacts can contain held-out validation details.
 
-It must find the exact step each failing run went wrong, citing the trace lines that prove it, and — when a prior candidate passed an input the parent fails — diff the right run against the wrong run on that same input (the highest-signal evidence available). Then it groups failures by root-cause pattern, reports how many runs share each, and recommends the single highest-impact pattern to fix.
-
-Log the failure patterns AND the cited trace evidence (file + line) in the experiment record, so a later reviewer can audit why an edit was made.
+It must find the exact step each failing run went wrong, citing the trace lines that prove it. Then it groups failures by root-cause pattern, reports how many runs share each, and recommends the single highest-impact pattern to fix. Log the failure patterns AND the cited trace evidence (file + line) in the experiment record, so a later reviewer can audit why an edit was made.
 
 ### 6a.5. post-failure self-diagnosis (target model)
 
@@ -303,23 +286,12 @@ See [references/structured-edits.md](references/structured-edits.md) for the ful
 - If the LLM produces freeform text instead of JSON, treat the entire response as an `append` op.
 - Generate a per-edit apply report: `{op, target_preview, content_preview, status}` where status is one of: `applied`, `skipped_protected`, `skipped_not_found`, `error`.
 
-### 6c-merge. System Aware Merge (optimizer model, alternative to 6a-6c)
-
-Mutation branches from ONE parent. When the Pareto frontier has **≥2 distinct members**, with probability ~0.3 skip the 6a→6c mutation path and instead produce the child by **merging two frontier parents** section-by-section.
-
-1. Sample 2 distinct candidates A and B from the frontier (same task-win weighting as 6.0).
-2. Split each SKILL.md into sections by `##`/`###` headings (plus the YAML frontmatter as a pseudo-section). For each section: if it evolved (differs from `SKILL.md.baseline`) in exactly one parent, take that parent's version; if both evolved it, ask the optimizer model to merge the two variants; if neither, keep the baseline version; if exactly one parent deleted a baseline section, honor the deletion.
-3. **Materialize the merged child into the working copy** (`[user-chosen-name].md`) before evaluating — the merge path skips 6a→6d's structured-edit application, so nothing else writes it. Reassemble the chosen sections and overwrite `[user-chosen-name].md`: emit baseline sections in baseline heading order, then any parent-added sections (present in a parent but not baseline) in that parent's original order, appended after the baseline body but before the SLOW_UPDATE block. Don't drop a new section just because it has no baseline slot — `system-aware-merge.md` treats a one-parent addition as an evolved section to include. Then continue at 6d step 3 (run training). Without this write, 6d would evaluate the unchanged parent / a no-op instead of the merged child.
-4. The merged child is a candidate like any other: it passes through the same regression guard (6e, against the **better** of the two parents) and validation gate (6f), and a discard goes to the rejected-edit buffer tagged `"strategy": "merge"`.
-
-Never recombine the SLOW_UPDATE protected region — the merged child inherits that block verbatim from the higher-`val_score` parent. Full algorithm and the optimizer merge prompt: [references/system-aware-merge.md](references/system-aware-merge.md).
-
 ### 6d. apply edits and run training set (target model)
 
 1. Apply the structured edits to `[user-chosen-name].md` with protected-region checks.
 2. Log the apply report.
 3. Run the updated skill on **training inputs** using the **target model**.
-4. **Capture the full execution trace of every run** to `traces/cand_<id>/run_<input>_r<n>.md` — the verbatim tool calls, arguments, results/errors, intermediate turns, retries, and final output, NOT a summary. This is the evidence the next round's proposer (6a) reads. Format and retention rules: [references/meta-harness-proposer.md](references/meta-harness-proposer.md). The candidate's `<id>` is assigned now (it becomes a pool member only if 6f KEEPs it; if discarded, its traces are retained for the last 3 rounds then pruned).
+4. **Capture the full execution trace of every run** to `traces/cand_<id>/run_<input>_r<n>.md` — the verbatim tool calls, arguments, results/errors, intermediate turns, retries, and final output, NOT a summary. This is the evidence the next round's proposer (6a) reads. Format and retention rules: [references/meta-harness-proposer.md](references/meta-harness-proposer.md). On a KEEP, these become the new `cand_best` traces; discarded candidates' traces are retained for the last 3 rounds then pruned.
 5. Score every output against every eval, and record each run's per-eval verdict (with the grader's reason) into the head of its trace file so the proposer sees scores and trace together.
 
 ### 6d.5. self-diagnostics capture
@@ -343,34 +315,24 @@ Self-diagnostics also feed into refusal eval design: if the agent consistently r
 
 ### 6e. regression guard
 
-Before proceeding to validation, check for regressions on the training set. With Pareto selection the comparison baseline is the **sampled parent** (the lineage this child branched from in 6.0), not the global accepted-best — otherwise a child that improves a non-global frontier lineage but is still below the global best on some eval would be discarded here before the sampled-parent gate in 6f ever runs, defeating the whole point of keeping non-best lineages alive.
+Before proceeding to validation, check for regressions on the training set:
 
-1. Compare per-eval pass/fail against the **sampled parent's** per-task pass history (from its `score_matrix.json` slice), not the global accepted-best and not the previous (possibly discarded) record. For a fresh 1-candidate pool the sampled parent *is* the accepted best, so this reduces to the old behavior.
-2. **Golden case check (strict, against the global best):** Golden cases are absolute and lineage-independent. If ANY golden case regresses on ANY eval **relative to the global best**, **discard immediately**: revert `[user-chosen-name].md` to the working-copy parent it was seeded from and log the discard reason as `"golden_case_regression"` in the rejected-edit buffer. No exceptions, regardless of net score improvement. Golden cases are the "memory of bugs you refuse to reintroduce."
-3. If any non-golden eval that was passing **on the sampled parent** now fails on any training input: regression detected.
-4. If the net training score is lower or equal **versus the sampled parent** after the regression: **discard immediately** — revert `[user-chosen-name].md` to the working-copy parent it was seeded from (mandatory, or the next experiment builds on the rejected edit), skip the validation gate, and add to the rejected-edit buffer with a "regression" tag.
-5. If the net training score is still higher **than the sampled parent's** despite the regression: proceed to validation gate (the improvement outweighs the regression).
+1. Compare per-eval pass/fail against the **last ACCEPTED (kept) experiment's** pass history, not just the previous record (which may be a discarded candidate). Track per-eval pass history keyed to the accepted-best state.
+2. **Golden case check (strict):** If ANY golden case regresses on ANY eval, **discard immediately**: revert `[user-chosen-name].md` to the accepted best (`[user-chosen-name].md.best`) and log the discard reason as `"golden_case_regression"` in the rejected-edit buffer. No exceptions, regardless of net score improvement. Golden cases are the "memory of bugs you refuse to reintroduce."
+3. If any non-golden eval that was previously passing now fails on any training input: regression detected.
+4. If the net training score is lower or equal after the regression: **discard immediately** — revert `[user-chosen-name].md` to the accepted best (mandatory, or the next experiment builds on the rejected edit), skip the validation gate, and add to the rejected-edit buffer with a "regression" tag.
+5. If the net training score is still higher despite the regression: proceed to validation gate (the improvement outweighs the regression).
 
-After any 6e discard reverts the working copy to its seeded parent, **restore the global best into the working copy** (`copy [user-chosen-name].md.best → [user-chosen-name].md`) before continuing — the seeded parent may be a non-global pool member, and a following slow update (6i) or final stop (8) runs and ships `[user-chosen-name].md`. Equivalently, mutate sampled parents on a scratch copy and only ever leave `.best` in the working path. The candidate's traces under `traces/cand_<id>/` are kept per the retention rule even on discard, so nothing is lost.
-
-Track per-eval pass history per candidate (in `score_matrix.json`) so you always know what each parent was passing before.
+Track per-eval pass history across experiments so you always know what was passing before.
 
 ### 6f. validation gate (target model)
 
 Run the updated skill on **validation inputs** using the **target model**. Score every output.
 
 **Keep/discard decision based on validation score:**
-- Val score improved over the **sampled parent's** val score (or, for a merge, over the **better** of the two parents — the higher-`val_score` one, so a merge can't regress against its stronger parent) → **KEEP.** Then:
-  1. Reuse the **same `cand_<id>` assigned in 6d** (do not mint a new one) and **freeze its skill text**: copy the current `[user-chosen-name].md` to that candidate's `skill_file` (e.g. `cand_3.md`). Keeping the id stable is what lets a later 6a find this pool member's failures under the `traces/cand_<id>/` archive 6d already wrote; a fresh id here would orphan those traces. The pool schema's selection and merge steps read these frozen files, so a kept candidate must have one before the working copy is reverted or advances.
-  2. Add it to `pool.json` (with its `parent_id`, or `parents` pair for a merge, its `skill_file`, its per-task matrix slice, and train/val scores) and write its per-task training results into `score_matrix.json`.
-  3. If it is also the highest-`val_score` candidate seen so far, snapshot it as the global best: copy `[user-chosen-name].md` to `[user-chosen-name].md.best` and record its hash in `checkpoint.json` as `best_skill_hash`.
-  4. **If it is NOT the new global best** (it only beat a lower-val sampled parent), restore the global best into the working copy before continuing: copy `[user-chosen-name].md.best` back over `[user-chosen-name].md`. The pool keeps the frozen `cand_N.md`, so nothing is lost, but the working copy / `.best` must stay the global best — later slow-update (6i) and final delivery (8) run and ship `[user-chosen-name].md`, so leaving a non-global candidate there would test/deliver the wrong artifact.
-
-  The pool is what 6.0 samples from; `.best` is only the single artifact delivered at the end.
+- Val score improved over previous best → **KEEP.** Update the working copy as the new best, then snapshot it: copy `[user-chosen-name].md` to `[user-chosen-name].md.best` and record its hash in `checkpoint.json` as `best_skill_hash`. Re-point the `traces/cand_best/` archive at this experiment's training traces (they're the evidence the next 6a reads). This is the validated state an interrupted resume restores from (see step 3).
 - Val score stayed the same → **DISCARD.** Revert the working copy to `[user-chosen-name].md.best`. The change added complexity without measurable improvement on held-out data.
 - Val score got worse → **DISCARD.** Revert the working copy to `[user-chosen-name].md.best`.
-
-Comparing against the **sampled parent** (not the global best) is what lets a non-best frontier candidate improve along its own lineage: a child only needs to beat the parent it branched from to earn a place in the pool.
 
 ### 6g. handle discard: rejected-edit buffer
 
@@ -398,9 +360,8 @@ After every experiment (kept or discarded):
 1. Append to `results.tsv`
 2. Update `results.json` (dashboard data)
 3. Update `rejected_edits.json` (if discarded)
-4. Update `pool.json` and `score_matrix.json` (if kept — the candidate and its per-task scores join the pool that 6.0 samples from)
-5. Update `checkpoint.json`: `{last_experiment, best_val_score, best_experiment, slow_update_count, best_skill_hash, split, pool_ids}` (keep the persisted split membership and pool intact across saves)
-6. Append to `changelog.md` (see step 7)
+4. Update `checkpoint.json`: `{last_experiment, best_val_score, best_experiment, slow_update_count, best_skill_hash, split}` (keep the persisted split membership intact across saves)
+5. Append to `changelog.md` (see step 7)
 
 ### 6i. slow update (every 5 experiments)
 
@@ -434,7 +395,7 @@ Every 5th experiment, pause the fast loop and run a longitudinal regression chec
    Write 2-4 high-level guidance notes for the next round of optimization. These will be injected into a protected section of the skill that step-level edits cannot modify."
 
 5. Write the guidance into the working skill copy between `<!-- SLOW_UPDATE_START -->` and `<!-- SLOW_UPDATE_END -->` markers. If these markers don't exist yet, add them at the end of the skill.
-6. **Gate the guidance like any other mutation.** Re-score train and validation independently. Keep the guidance only if train improves and validation doesn't regress; otherwise revert it (or remove it on the first slow update) and log `"rejected"` in `slow_updates.json`. If kept, update `[user-chosen-name].md.best`/`best_skill_hash` **and register the accepted skill as a full pool candidate**: assign it a fresh `cand_N` id, capture and write its train-run execution traces under `traces/cand_N/run_*.md` (same format and retention as 6d — without these the proposer's full-trace contract breaks the next time this member is sampled), freeze it to `cand_N.md`, add it to `pool.json` (with `parent_id` = the best it was built on, `skill_file`, and `"strategy": "slow_update"`), and write its per-task training results into `score_matrix.json`. Otherwise the delivered best becomes a skill absent from the pool, and the next 6.0 selection or merge can't sample, score, or diagnose the actual current best.
+6. **Gate the guidance like any other mutation.** Re-score train and validation independently. Keep the guidance only if train improves and validation doesn't regress; otherwise revert it (or remove it on the first slow update) and log `"rejected"` in `slow_updates.json`. If kept, update `[user-chosen-name].md.best`/`best_skill_hash` and re-point the `traces/cand_best/` archive at this slow update's training traces (capture them in the same format as 6d, since they're what the next 6a reads).
 7. Each accepted slow update overwrites the previous guidance (not accumulating).
 8. Log to `slow_updates.json`.
 
@@ -526,12 +487,11 @@ A good optimization run:
 2. **Used binary evals only** -- no scales, no vibes, no "rate this 1-10"
 3. **Split the data** -- training, validation, and (ideally) test sets are separate
 4. **Used structured edits** -- every mutation is a typed operation with a target, not freeform rewriting
-5. **Selected parents by Pareto frontier** -- branched from per-task winners sampled by tasks won, not always the single average-best (GEPA), so the search didn't collapse into one lineage
-6. **Proposed edits from full traces** -- the optimizer read each failing run's verbatim execution trace and cited the exact step it diverged (Meta-Harness), not a compressed "which eval failed" summary
-7. **Tracked rejections** -- the rejected-edit buffer prevented repeating failed approaches
-8. **Checked for regressions** -- both per-experiment (regression guard) and longitudinally (slow update)
-9. **Kept a complete log** -- every experiment recorded, kept or discarded, with edit ops and apply reports
-10. **Improved the honest score** -- test set score improved, not just training or validation
-11. **Ran autonomously** -- didn't stop to ask permission between experiments
+5. **Proposed edits from full traces** -- the optimizer read each failing run's verbatim execution trace and cited the exact step it diverged (Meta-Harness), not a compressed "which eval failed" summary
+6. **Tracked rejections** -- the rejected-edit buffer prevented repeating failed approaches
+7. **Checked for regressions** -- both per-experiment (regression guard) and longitudinally (slow update)
+8. **Kept a complete log** -- every experiment recorded, kept or discarded, with edit ops and apply reports
+9. **Improved the honest score** -- test set score improved, not just training or validation
+10. **Ran autonomously** -- didn't stop to ask permission between experiments
 
 If the skill "passes" all evals but the actual output quality hasn't improved, the evals are bad, not the skill. Go back to step 2 and write better evals.

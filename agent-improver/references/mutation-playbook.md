@@ -257,52 +257,6 @@ for wrong queries. Not a SKILL.md body change — this modifies the frontmatter
 
 ---
 
-## 11. System Aware Merge (crossover, two parents)
-
-**When to use:** The Pareto pool has ≥2 frontier candidates that are each strong on
-*different* eval cases. Mutation explores one parent at a time; merge combines the
-section that evolved well in candidate A with a different section that evolved well
-in candidate B, in a single step. This is GEPA's second proposal strategy (the only
-recipe here that takes two parents instead of one).
-
-**Technique:**
-- **Prerequisite — snapshot a frozen baseline first.** This recipe's per-section
-  "did it evolve" test compares each parent against a stable baseline `SKILL.md`. The
-  agent-improver flow records baseline *metrics* (`eval_results/baseline.json`) and
-  keeps advancing `current_best/SKILL.md`, but never freezes the baseline *skill text*.
-  Before enabling System Aware Merge, copy the original skill to a frozen
-  `current_best/SKILL.md.baseline` (once, at Step 1) and never overwrite it. Without it,
-  after the best has moved the loop can't tell whether A evolved, B evolved, or both,
-  and picks the wrong section.
-- Sample 2 distinct frontier candidates A and B (weighted by cases won).
-- Split each SKILL.md into sections by `##`/`###` headings (treat the frontmatter
-  preamble as one section too).
-- For each section: if it evolved (differs from the frozen baseline) in exactly one
-  parent, take that parent's version; if both evolved it, ask the optimizer model to
-  merge the two variants without contradiction; if neither, keep the baseline version;
-  if exactly one parent deleted a baseline section, honor the deletion.
-- Materialize the merged sections into the working `SKILL.md` before re-eval.
-- The merged child is a candidate like any other: it passes the Step 4 constraint
-  check and Step 5 re-eval. Discard if it doesn't beat its better parent on val.
-
-**Example:**
-```
-A evolved "## Tool Priority" (now solves the wrong-tool cases), baseline elsewhere.
-B evolved "## Output Format" (now solves the format cases), baseline elsewhere.
-Merge → takes A's Tool Priority + B's Output Format → solves both case groups at once.
-```
-
-**Risk:** Medium. A naive concatenation can duplicate or contradict guidance; the
-per-section evolved-vs-baseline rule prevents that. Never merge across a protected
-region.
-**Expected impact:** High when two candidates each own a distinct cluster of cases.
-Useless with a single-candidate pool (nothing to merge).
-
-Full algorithm and the optimizer merge prompt: see the vendored
-[system-aware-merge.md](system-aware-merge.md) reference in this directory.
-
----
-
 ## Mutation Combinations
 
 Sometimes you need multiple recipes in one mutation. Valid combinations:

@@ -9,7 +9,7 @@ The full spec for the live dashboard and the artifact file formats. SKILL.md ste
 Before running any experiments, create a live HTML dashboard at `autoresearch-[skill-name]/dashboard.html` and open it in the browser.
 
 The dashboard must:
-- Auto-refresh every 10 seconds, fetching **three** artifacts: `results.json` (scores/experiments), `pool.json` (candidate pool + lineage), and `score_matrix.json` (per-task pass-rates). The heatmap and pool tree below read the latter two, which are separate files — not fields in `results.json` — so the dashboard must fetch them explicitly (a missing/empty file just renders that panel empty until the first KEEP writes it).
+- Auto-refresh every 10 seconds (reads from `results.json`)
 - Show TWO score progression lines: training score and validation score (experiment number on X axis, pass rate % on Y axis). Divergence between the two = overfitting signal.
 - Show a colored bar for each experiment: green = keep, red = discard, blue = baseline, orange = slow update
 - Show a table of all experiments with: experiment #, train_score, val_score, status, description, edit_ops applied
@@ -17,12 +17,10 @@ The dashboard must:
 - Show rejected-edit buffer contents (last 10)
 - Show diagnostics frequency chart: how often each diagnostic category appears across all runs
 - Show golden case status: a row per golden case with pass/fail history across experiments (🔒 indicator, green/red per experiment)
-- Show the **score matrix heatmap** (the diagram's Scores Matrix): rows = tasks (`input_id` × `eval_name`), columns = pool candidates, cell = green (pass-rate high) to red (low). Mark Pareto-frontier candidates with a star in the column header so you can see which candidates are alive for selection.
-- Show the **candidate pool tree**: each kept candidate as a node with an edge to its `parent_id` (mutation) or both `parents` (merge), so the branching structure is visible.
 - Show current status: "Running experiment [N]..." or "Idle"
 - Use clean styling with soft colors (white background, pastel accents, clean sans-serif font)
 
-Generate the dashboard as a single self-contained HTML file with inline CSS and JavaScript. Use Chart.js loaded from CDN for the line chart. The JS should fetch `results.json`, `pool.json`, and `score_matrix.json` on each refresh and re-render (tolerate a missing `pool.json`/`score_matrix.json` before the first KEEP).
+Generate the dashboard as a single self-contained HTML file with inline CSS and JavaScript. Use Chart.js loaded from CDN for the line chart. The JS should fetch `results.json` and re-render.
 
 **Open it immediately** after creating it: `open dashboard.html` (macOS) so the user can see it in their browser.
 
@@ -99,11 +97,9 @@ autoresearch-[skill-name]/
 ├── changelog.md             # detailed mutation log with edit ops and apply reports
 ├── rejected_edits.json      # buffer of failed mutations with structured edit details
 ├── slow_updates.json        # longitudinal comparison history
-├── pool.json                # the candidate pool (every KEPT candidate + lineage)
-├── score_matrix.json        # per-task × per-candidate pass-rates (the Scores Matrix)
-├── traces/                  # full per-run execution traces, organized by candidate
-│   └── cand_<id>/run_<input>_r<n>.md
 ├── checkpoint.json          # resume state
+├── traces/                  # full per-run execution traces the proposer reads
+│   └── cand_best/run_<input>_r<n>.md
 ├── SKILL.md.baseline        # original skill before optimization (untouched)
 └── [user-chosen-name].md    # working copy with protected guidance section
 ```
@@ -121,7 +117,6 @@ The resume state. Stores the **split membership** (not just counts) so a resumed
   "best_experiment": 5,
   "slow_update_count": 1,
   "best_skill_hash": "sha256:…",
-  "pool_ids": ["cand_0", "cand_3", "cand_5", "cand_7"],
   "split": {
     "seed": 1337,
     "train": ["input_id_1", "input_id_4", "input_id_6", "input_id_8"],
@@ -131,68 +126,4 @@ The resume state. Stores the **split membership** (not just counts) so a resumed
 }
 ```
 
-`best_skill_hash` is the hash of `[user-chosen-name].md.best`; on resume, restore from `.best` if the working file doesn't match. A deterministic `seed` plus an ordered input list is fine in place of explicit `split` arrays. `pool_ids` lists every candidate currently in `pool.json` so a resumed run rebuilds the same frontier.
-
----
-
-## pool.json format
-
-The candidate pool that Pareto selection (SKILL.md step 6.0) samples from. Every KEPT candidate gets an entry; the baseline is `cand_0`. The `parent_id` / `parents` fields give the diagram's branching tree.
-
-```json
-{
-  "candidates": [
-    {
-      "id": "cand_0",
-      "parent_id": null,
-      "strategy": "baseline",
-      "skill_file": "cand_0.md",
-      "skill_hash": "sha256:…",
-      "train_score": 70.0,
-      "val_score": 65.0,
-      "experiment": 0
-    },
-    {
-      "id": "cand_3",
-      "parent_id": "cand_0",
-      "strategy": "mutation",
-      "skill_file": "cand_3.md",
-      "skill_hash": "sha256:…",
-      "train_score": 80.0,
-      "val_score": 75.0,
-      "experiment": 3
-    },
-    {
-      "id": "cand_7",
-      "parents": ["cand_3", "cand_5"],
-      "strategy": "merge",
-      "skill_file": "cand_7.md",
-      "skill_hash": "sha256:…",
-      "train_score": 88.0,
-      "val_score": 84.0,
-      "experiment": 7
-    }
-  ]
-}
-```
-
-Mutation children carry a single `parent_id`; merge children carry a `parents` pair. Store each candidate's frozen skill text as `cand_<id>.md` in the working directory so selection and merge can read any pool member's exact content, not just the current best.
-
----
-
-## score_matrix.json format
-
-The per-task × per-candidate pass-rate grid (the diagram's Scores Matrix). A "task" is one `(input_id, eval_name)` cell scored on the **training set only**; the value is the mean pass-rate over `runs per experiment`, in [0, 1]. This is the sole input to Pareto frontier computation.
-
-```json
-{
-  "tasks": ["input_1::legibility", "input_1::accuracy", "input_4::legibility", "input_4::accuracy"],
-  "matrix": {
-    "cand_0": {"input_1::legibility": 0.0, "input_1::accuracy": 0.33, "input_4::legibility": 1.0, "input_4::accuracy": 0.0},
-    "cand_3": {"input_1::legibility": 1.0, "input_1::accuracy": 0.66, "input_4::legibility": 1.0, "input_4::accuracy": 0.0},
-    "cand_7": {"input_1::legibility": 1.0, "input_1::accuracy": 1.0,  "input_4::legibility": 1.0, "input_4::accuracy": 0.66}
-  }
-}
-```
-
-Validation cells are never written here: selection must not see validation, which stays a pure accept/reject gate. The frontier (per-task winners) and the task-win weights are computed from this file each time step 6.0 runs.
+`best_skill_hash` is the hash of `[user-chosen-name].md.best`; on resume, restore from `.best` if the working file doesn't match. A deterministic `seed` plus an ordered input list is fine in place of explicit `split` arrays.

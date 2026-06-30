@@ -105,8 +105,6 @@ Cross-transfer: Codex-trained SpreadsheetBench skill → Claude Code: +31.8 poin
 
 ## Roadmap (not yet implemented in skill-improver)
 
-> Note: GEPA's evolutionary-search layer (Pareto-frontier parent selection + a persistent candidate pool + System Aware Merge) **is** now implemented — see SKILL.md step 6.0/6c-merge, `references/pareto-selection.md`, and `references/system-aware-merge.md`. The items below are the remaining SkillOpt mechanisms that are still unbuilt.
-
 These SkillOpt mechanisms are not in the current skill-improver flow, but are worth adding later:
 
 - **Periodic full rewrite.** Every 10 experiments, produce a complete clean rewrite of the skill from accumulated suggestions instead of incremental edits. Consolidates redundancies from many small changes. (SkillOpt's `rewrite_skill.md` mode.)
