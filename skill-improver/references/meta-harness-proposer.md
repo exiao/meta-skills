@@ -65,7 +65,7 @@ Instead of pre-digesting failures into a summary and handing the optimizer a par
 
 > "You are improving a skill. You have read access to this run's `proposer_view/` directory:
 > - `[user-chosen-name].md` — the current skill source
-> - `proposer_context.json` — train per-eval scores and keep/discard history, with validation details redacted
+> - `proposer_context.json` — train per-eval scores and keep/discard history, plus the per-run train self-diagnostics (6d.5), with validation details redacted
 > - `traces/cand_best/run_*.md` — the FULL execution trace of every training run, including tool calls, intermediate reasoning, and the exact step where each failing run diverged
 > - `rejected_edits.json` — edits already tried and rejected (do not repeat)
 >

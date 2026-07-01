@@ -300,7 +300,7 @@ After each run completes but before scoring, ask the **target model** to report 
 
 > "You just completed this task. Before I score your output, report any moments where you: (a) lacked sufficient context to be confident, (b) guessed or assumed instead of verifying, (c) had a tool call fail or return unexpected data, (d) were unsure which approach to take. Report each as: `DIAGNOSTIC: [category] [one-line description]`. Categories: `missing_context`, `guessed`, `tool_failure`, `low_confidence`, `none`. If everything went smoothly, report `DIAGNOSTIC: none`."
 
-Log diagnostics alongside eval scores in `results.json` under a `"diagnostics"` array per run:
+Log diagnostics alongside eval scores in `results.json` under a `"diagnostics"` array per run. For **training runs**, also copy the diagnostics into the proposer-safe export (`proposer_context.json`, or appended to the train trace for that run) so they survive the redaction in step 6a — the raw `results.json` is not mounted for the proposer, so a diagnostic that lives only there never reaches failure clustering. Validation-run diagnostics stay in `results.json` only and are never exported.
 
 ```json
 {"input": "...", "diagnostics": [
@@ -309,7 +309,7 @@ Log diagnostics alongside eval scores in `results.json` under a `"diagnostics"` 
 ]}
 ```
 
-During failure clustering (step 6a), the optimizer model receives diagnostics alongside failing outputs. A failure where the agent reported low confidence is a higher-signal fix target than a silent failure, because the agent already knows what went wrong. Surface diagnostic frequency in the dashboard: a skill that reports `guessed` on 40% of runs has a calibration problem, not just an output quality problem.
+During failure clustering (step 6a), the optimizer model receives these train diagnostics (via `proposer_context.json`) alongside the failing runs' traces. A failure where the agent reported low confidence is a higher-signal fix target than a silent failure, because the agent already knows what went wrong. Surface diagnostic frequency in the dashboard: a skill that reports `guessed` on 40% of runs has a calibration problem, not just an output quality problem.
 
 Self-diagnostics also feed into refusal eval design: if the agent consistently reports `missing_context` on certain input types, those are candidates for refusal inputs.
 
