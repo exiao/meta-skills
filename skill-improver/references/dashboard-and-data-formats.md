@@ -98,6 +98,8 @@ autoresearch-[skill-name]/
 ├── rejected_edits.json      # buffer of failed mutations with structured edit details
 ├── slow_updates.json        # longitudinal comparison history
 ├── checkpoint.json          # resume state
+├── traces/                  # full per-run execution traces the proposer reads
+│   └── cand_best/run_<input>_r<n>.md
 ├── SKILL.md.baseline        # original skill before optimization (untouched)
 └── [user-chosen-name].md    # working copy with protected guidance section
 ```

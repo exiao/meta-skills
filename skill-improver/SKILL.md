@@ -3,7 +3,7 @@ name: skill-improver
 description: "Eval-driven skill optimizer: runs a skill repeatedly, scores outputs against binary evals, mutates the prompt via structured edits, and keeps only changes that improve a held-out validation score (cross-model optimizer/target, three-way splits, golden cases, checkpoint resume). Use when: optimize/improve this skill, make this skill better, run autoresearch on, self-improve skill, benchmark/eval my skill, run evals on."
 ---
 
-> **Source:** Karpathy autoresearch + SkillOpt (Microsoft Research, arxiv:2605.23904) + howtoeval.com (Ben Hylak, May 2026). See `references/structured-edits.md` for edit op spec, `references/eval-guide.md` for eval writing (including refusal evals, trajectory evals, and golden cases), `references/pitfalls.md` for known failure modes, `references/self-diagnostics.md` for the diagnostic capture protocol, `references/skillopt-architecture.md` for the SkillOpt comparison and roadmap, `references/dashboard-and-data-formats.md` for the dashboard spec and artifact schemas, `references/worked-example.md` for a full run walkthrough and operational tips, `references/mutation-principles.md` for how to mutate well.
+> **Source:** Karpathy autoresearch + SkillOpt (Microsoft Research, arxiv:2605.23904) + Meta-Harness end-to-end harness optimization (Lee et al., arxiv:2603.28052) + howtoeval.com (Ben Hylak, May 2026). See `references/structured-edits.md` for edit op spec, `references/eval-guide.md` for eval writing (including refusal evals, trajectory evals, and golden cases), `references/pitfalls.md` for known failure modes, `references/self-diagnostics.md` for the diagnostic capture protocol, `references/skillopt-architecture.md` for the SkillOpt comparison and roadmap, `references/meta-harness-proposer.md` for the full-trace filesystem-browsing edit proposer, `references/dashboard-and-data-formats.md` for the dashboard spec and artifact schemas, `references/worked-example.md` for a full run walkthrough and operational tips, `references/mutation-principles.md` for how to mutate well.
 
 # Skill Optimizer
 
@@ -15,7 +15,7 @@ Take any existing skill, define what "good output" looks like as binary yes/no c
 2. **Gather the eval setup.** Confirm 8-12 test inputs, 3-6 binary evals, model config, run count, budget cap, and golden cases. Split inputs into train/validation/test.
 3. **Establish the baseline.** Copy the unchanged skill into the working directory, run train + validation with the target model, score it, and create the dashboard/checkpoint.
 4. **Score outputs with binary evals.** Include refusal evals and trajectory evals when the skill's failure mode depends on uncertainty or process, not just final text.
-5. **Diagnose failures.** Cluster failing outputs, self-diagnostics, and success patterns with the optimizer model.
+5. **Diagnose failures from full training traces.** Let the optimizer browse the per-candidate training execution traces (every tool call, every turn, the exact divergence step) plus train scores and source, while keeping validation outputs and traces sealed, and cite where each failing run went wrong (Meta-Harness), instead of getting a compressed "which eval failed" summary. See `references/meta-harness-proposer.md`.
 6. **Propose one structured edit.** Apply an append/insert_after/replace/delete mutation to the working copy only, starting with audit-found obvious fixes when they are high-confidence.
 7. **Validate before keeping.** Reject any golden-case regression and any mutation that fails to improve held-out validation. Keep only measured improvements; log all rejects.
 8. **Repeat, then seal it.** Use the rejected-edit buffer and slow updates until plateau/budget/user stop, then score the sealed test set once and deliver the improved file plus artifacts.
@@ -178,6 +178,7 @@ Before creating anything new, check if `autoresearch-[skill-name]/` already exis
 2. Read `results.json` for full experiment history
 3. Read `rejected_edits.json` for the rejected-edit buffer
 4. Read `slow_updates.json` for longitudinal comparison history
+4b. Confirm `traces/` holds the per-candidate execution traces the proposer reads. If `traces/` is absent or missing the best candidate (a pre-Meta-Harness run), do a **training-only trace refresh before 6a proposes anything**: restore `[name].md.best`, re-run it on the recorded training split, and capture `traces/cand_best/run_*.md`. Do not run validation during this refresh and do not expose validation outputs; once the traces exist, resume with trace-grounded proposal. Never let the first post-resume proposal fall back to stale summaries or empty evidence.
 5. Restore `[name].md` from `[name].md.best` if it no longer matches `best_skill_hash` (a prior run was interrupted mid-mutation). Resume only from the last accepted state.
 6. Tell the user: "Found existing run at experiment [N] with best val_score [X]%. Resume or start fresh?"
 7. If resume: skip baseline, load all state, continue from experiment N+1
@@ -206,7 +207,7 @@ Run the skill AS-IS before changing anything. This is experiment #0.
 3. **Copy the original SKILL.md into the working directory as `[user-chosen-name].md`** -- this is the copy you will mutate. NEVER edit the original SKILL.md. All mutations happen on this copy only.
 4. Also save `SKILL.md.baseline` in the working directory (identical to the original -- this is your revert target and slow-update comparison anchor)
 5. Create `results.tsv`, `results.json`, `rejected_edits.json` (empty array), `slow_updates.json` (empty array), and `dashboard.html`. Open the dashboard. Don't create `checkpoint.json` yet (step 9).
-6. Run the skill using **only the train + validation sets** with the **target model**. Score every output against every eval. Leave the test set sealed until final evaluation (step 8).
+6. Run the skill using **only the train + validation sets** with the **target model**. Score every output against every eval. Capture the full execution trace of every training run to `traces/cand_best/run_*.md` (same format as step 6d) — the baseline traces are what the first proposer round reads. Leave the test set sealed until final evaluation (step 8).
 7. Record the baseline: `train_score` and `val_score` independently. The test set is scored once, at step 8.
 8. **Snapshot the baseline as the initial accepted best:** copy `[user-chosen-name].md` to `[user-chosen-name].md.best` and record its hash. This is the accepted state until the first KEEP.
 9. Create `checkpoint.json` now (after the `.best` snapshot), with `best_skill_hash` and the split membership (schema in [references/dashboard-and-data-formats.md](references/dashboard-and-data-formats.md)).
@@ -228,27 +229,16 @@ This is the core optimization loop. Once started, run autonomously until stopped
 
 ### 6a. failure pattern clustering (optimizer model)
 
-Collect ALL failing outputs from the training set. For each failure include the **input**, the **output**, and **which evals failed** (by name) plus any self-diagnosis notes, so the optimizer fixes the actual failure instead of guessing. Send to the **optimizer model**:
+Don't pre-digest failures into a paragraph and hand the optimizer a summary. That aggressive feedback compression is exactly what Meta-Harness (arxiv 2603.28052) identifies as why text optimizers underperform on skill code: the summary tells you the failure's destination ("failed the accuracy eval"), not the wrong turn that caused it. Instead, run the **optimizer model** as a short agentic loop with file-read tools scoped only to a proposer-readable redacted view such as `autoresearch-[skill-name]/proposer_view/`, and let it investigate the train-side execution traces before proposing anything. Do not mount or expose the raw experiment root if it contains validation rows, validation traces, grader reasons, or per-validation-case failures. Full protocol (the trace archive layout, the proposer prompt, cost bounds): [references/meta-harness-proposer.md](references/meta-harness-proposer.md).
 
-"Here are [N] failures. The current skill is: [skill content].
+The proposer reads, for the failing runs on the current accepted best:
+- `traces/cand_best/run_*.md` — the FULL trace of each run: every tool call, every intermediate turn, retries, and the exact step where the run diverged (not just the final output).
+- a proposer-safe history export — train per-eval scores, keep/discard status, and prior rejected edit hypotheses. Do **not** give the proposer raw `results.json` if it contains validation rows, per-validation-case failures, validation traces, or validation grader reasons.
+- `rejected_edits.json` — edits already tried (do not repeat these or minor variants).
 
-Each failure:
-- Input: [original input]
-- Output: [output]
-- Failed evals: [names of the eval criteria that failed, and why]
-- Diagnosis (if any): [self-diagnosis from 6a.5]
+Validation remains an accept/reject gate only: 6f may record aggregate validation scores for the dashboard/checkpoint, but validation outputs, validation traces, and validation failure reasons must not enter the proposer-readable archive. Generate a train-only `proposer_context.json` plus copied/symlinked train traces inside `proposer_view/`, then scope the proposer's file-read tools to that redacted directory. Do not grant the proposer access to the raw `autoresearch-[skill-name]/` root, because adjacent dashboard/checkpoint artifacts can contain held-out validation details.
 
-Group them by failure pattern. For each pattern:
-(a) What went wrong
-(b) How many outputs share this pattern
-(c) What skill change would fix it
-
-Then recommend which single pattern to fix first (highest impact).
-
-Previously rejected edits (do not repeat these or minor variants), plus audit-found deterministic fixes to seed this mutation (if any; phrase them as required working-copy edits):
-[rejected-edit buffer contents; step 1 deterministic obvious fixes or empty]"
-
-Log the failure patterns in the experiment record.
+It must find the exact step each failing run went wrong, citing the trace lines that prove it. Then it groups failures by root-cause pattern, reports how many runs share each, and recommends the single highest-impact pattern to fix. Log the failure patterns AND the cited trace evidence (file + line) in the experiment record, so a later reviewer can audit why an edit was made.
 
 ### 6a.5. post-failure self-diagnosis (target model)
 
@@ -301,7 +291,8 @@ See [references/structured-edits.md](references/structured-edits.md) for the ful
 1. Apply the structured edits to `[user-chosen-name].md` with protected-region checks.
 2. Log the apply report.
 3. Run the updated skill on **training inputs** using the **target model**.
-4. Score every output against every eval.
+4. **Capture the full execution trace of every run** to `traces/cand_<id>/run_<input>_r<n>.md` — the verbatim tool calls, arguments, results/errors, intermediate turns, retries, and final output, NOT a summary. This is the evidence the next round's proposer (6a) reads. Format and retention rules: [references/meta-harness-proposer.md](references/meta-harness-proposer.md). On a KEEP, these become the new `cand_best` traces; discarded candidates' traces are retained for the last 3 rounds then pruned.
+5. Score every output against every eval, and record each run's per-eval verdict (with the grader's reason) into the head of its trace file so the proposer sees scores and trace together.
 
 ### 6d.5. self-diagnostics capture
 
@@ -309,7 +300,7 @@ After each run completes but before scoring, ask the **target model** to report 
 
 > "You just completed this task. Before I score your output, report any moments where you: (a) lacked sufficient context to be confident, (b) guessed or assumed instead of verifying, (c) had a tool call fail or return unexpected data, (d) were unsure which approach to take. Report each as: `DIAGNOSTIC: [category] [one-line description]`. Categories: `missing_context`, `guessed`, `tool_failure`, `low_confidence`, `none`. If everything went smoothly, report `DIAGNOSTIC: none`."
 
-Log diagnostics alongside eval scores in `results.json` under a `"diagnostics"` array per run:
+Log diagnostics alongside eval scores in `results.json` under a `"diagnostics"` array per run. For **training runs**, also copy the diagnostics into the proposer-safe export (`proposer_context.json`, or appended to the train trace for that run) so they survive the redaction in step 6a — the raw `results.json` is not mounted for the proposer, so a diagnostic that lives only there never reaches failure clustering. Validation-run diagnostics stay in `results.json` only and are never exported.
 
 ```json
 {"input": "...", "diagnostics": [
@@ -318,7 +309,7 @@ Log diagnostics alongside eval scores in `results.json` under a `"diagnostics"` 
 ]}
 ```
 
-During failure clustering (step 6a), the optimizer model receives diagnostics alongside failing outputs. A failure where the agent reported low confidence is a higher-signal fix target than a silent failure, because the agent already knows what went wrong. Surface diagnostic frequency in the dashboard: a skill that reports `guessed` on 40% of runs has a calibration problem, not just an output quality problem.
+During failure clustering (step 6a), the optimizer model receives these train diagnostics (via `proposer_context.json`) alongside the failing runs' traces. A failure where the agent reported low confidence is a higher-signal fix target than a silent failure, because the agent already knows what went wrong. Surface diagnostic frequency in the dashboard: a skill that reports `guessed` on 40% of runs has a calibration problem, not just an output quality problem.
 
 Self-diagnostics also feed into refusal eval design: if the agent consistently reports `missing_context` on certain input types, those are candidates for refusal inputs.
 
@@ -339,9 +330,9 @@ Track per-eval pass history across experiments so you always know what was passi
 Run the updated skill on **validation inputs** using the **target model**. Score every output.
 
 **Keep/discard decision based on validation score:**
-- Val score improved over previous best → **KEEP.** Update the working copy as the new best, then snapshot it: copy `[user-chosen-name].md` to `[user-chosen-name].md.best` and record its hash in `checkpoint.json` as `best_skill_hash`. This is the validated state an interrupted resume restores from (see step 3).
-- Val score stayed the same → **DISCARD.** Revert working copy. The change added complexity without measurable improvement on held-out data.
-- Val score got worse → **DISCARD.** Revert working copy.
+- Val score improved over previous best → **KEEP.** Update the working copy as the new best, then snapshot it: copy `[user-chosen-name].md` to `[user-chosen-name].md.best` and record its hash in `checkpoint.json` as `best_skill_hash`. Re-point the `traces/cand_best/` archive at this experiment's training traces (they're the evidence the next 6a reads). This is the validated state an interrupted resume restores from (see step 3).
+- Val score stayed the same → **DISCARD.** Revert the working copy to `[user-chosen-name].md.best`. The change added complexity without measurable improvement on held-out data.
+- Val score got worse → **DISCARD.** Revert the working copy to `[user-chosen-name].md.best`.
 
 ### 6g. handle discard: rejected-edit buffer
 
@@ -404,7 +395,7 @@ Every 5th experiment, pause the fast loop and run a longitudinal regression chec
    Write 2-4 high-level guidance notes for the next round of optimization. These will be injected into a protected section of the skill that step-level edits cannot modify."
 
 5. Write the guidance into the working skill copy between `<!-- SLOW_UPDATE_START -->` and `<!-- SLOW_UPDATE_END -->` markers. If these markers don't exist yet, add them at the end of the skill.
-6. **Gate the guidance like any other mutation.** Re-score train and validation independently. Keep the guidance only if train improves and validation doesn't regress; otherwise revert it (or remove it on the first slow update) and log `"rejected"` in `slow_updates.json`. Update `[user-chosen-name].md.best`/`best_skill_hash` if kept.
+6. **Gate the guidance like any other mutation.** Re-score train and validation independently. Keep the guidance only if train improves and validation doesn't regress; otherwise revert it (or remove it on the first slow update) and log `"rejected"` in `slow_updates.json`. If kept, update `[user-chosen-name].md.best`/`best_skill_hash` and re-point the `traces/cand_best/` archive at this slow update's training traces (capture them in the same format as 6d, since they're what the next 6a reads).
 7. Each accepted slow update overwrites the previous guidance (not accumulating).
 8. Log to `slow_updates.json`.
 
@@ -496,10 +487,11 @@ A good optimization run:
 2. **Used binary evals only** -- no scales, no vibes, no "rate this 1-10"
 3. **Split the data** -- training, validation, and (ideally) test sets are separate
 4. **Used structured edits** -- every mutation is a typed operation with a target, not freeform rewriting
-5. **Tracked rejections** -- the rejected-edit buffer prevented repeating failed approaches
-6. **Checked for regressions** -- both per-experiment (regression guard) and longitudinally (slow update)
-7. **Kept a complete log** -- every experiment recorded, kept or discarded, with edit ops and apply reports
-8. **Improved the honest score** -- test set score improved, not just training or validation
-9. **Ran autonomously** -- didn't stop to ask permission between experiments
+5. **Proposed edits from full traces** -- the optimizer read each failing run's verbatim execution trace and cited the exact step it diverged (Meta-Harness), not a compressed "which eval failed" summary
+6. **Tracked rejections** -- the rejected-edit buffer prevented repeating failed approaches
+7. **Checked for regressions** -- both per-experiment (regression guard) and longitudinally (slow update)
+8. **Kept a complete log** -- every experiment recorded, kept or discarded, with edit ops and apply reports
+9. **Improved the honest score** -- test set score improved, not just training or validation
+10. **Ran autonomously** -- didn't stop to ask permission between experiments
 
 If the skill "passes" all evals but the actual output quality hasn't improved, the evals are bad, not the skill. Go back to step 2 and write better evals.
