@@ -82,13 +82,19 @@ def parallel(fns, workers=4):
         return list(ex.map(lambda f: f(), fns))
 
 # ---- the workflow (plan-in-code) ----
+def claim_key(claim):
+    # Derive the checkpoint key from the claim CONTENT, not its list index, so
+    # editing/inserting a claim between runs invalidates only the stale entries
+    # instead of silently reusing another claim's cached research/verdict by index.
+    return hashlib.sha1(claim.encode("utf-8")).hexdigest()[:12]
+
 def phase1_research(i, claim):
-    return agent(f"research:{i}", f"In 2-3 sentences, state the known facts relevant to "
+    return agent(f"research:{claim_key(claim)}", f"In 2-3 sentences, state the known facts relevant to "
                  f"evaluating this claim. Be specific with dates/numbers.\nClaim: {claim}")
 
 def phase2_verify(i, claim, research, vote):
     # adversarial: try to REFUTE, default refuted if uncertain
-    out = agent(f"verify:{i}:{vote}",
+    out = agent(f"verify:{claim_key(claim)}:{vote}",
         f"You are an adversarial fact-checker. TRY TO REFUTE this claim. If you cannot "
         f"clearly confirm it from the facts, default to REFUTED.\n"
         f"Claim: {claim}\nFacts: {research}\n"
