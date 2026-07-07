@@ -64,6 +64,15 @@ def agent(key, prompt, max_tokens=400):
                 CKPT_STATE["agents"][key] = text
                 save_ckpt(CKPT_STATE)   # checkpoint immediately, per call
             return text
+        except urllib.error.HTTPError as e:
+            # Preserve the server response body (proxy/Anthropic 400/429 detail),
+            # which is lost if we only stringify the HTTPError object.
+            try:
+                detail = e.read().decode("utf-8", "replace")
+            except Exception:
+                detail = ""
+            last = f"HTTP {e.code} {e.reason}: {detail}"
+            time.sleep(1.5 * (attempt + 1))
         except Exception as e:
             last = e; time.sleep(1.5 * (attempt + 1))
     raise RuntimeError(f"agent {key} failed after retries: {last}")
@@ -85,10 +94,14 @@ def phase2_verify(i, claim, research, vote):
         f"Claim: {claim}\nFacts: {research}\n"
         f'Reply with exactly one line: "VERDICT: SUPPORTED" or "VERDICT: REFUTED", then a 10-word reason.',
         max_tokens=80)
-    # Parse ONLY the VERDICT line, not the free-text reason: a reason like
-    # "not clearly supported by the facts" would otherwise flip REFUTED -> SUPPORTED.
-    verdict_line = next((ln for ln in out.upper().splitlines() if "VERDICT" in ln), out.upper())
-    return "SUPPORTED" if "SUPPORTED" in verdict_line else "REFUTED"
+    # Parse ONLY the label token after "VERDICT:", not the free-text reason:
+    # a reason like "the claim is unsupported by the facts" would otherwise flip
+    # REFUTED -> SUPPORTED, because "SUPPORTED" is a substring of "UNSUPPORTED".
+    up = out.upper()
+    verdict_line = next((ln for ln in up.splitlines() if "VERDICT" in ln), up)
+    label = verdict_line.split("VERDICT", 1)[-1].lstrip(": \t").split()[:1]
+    label = label[0] if label else ""
+    return "SUPPORTED" if label == "SUPPORTED" else "REFUTED"
 
 def main():
     if "--reset" in sys.argv and os.path.exists(CKPT):

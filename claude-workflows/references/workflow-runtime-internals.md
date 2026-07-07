@@ -4,10 +4,10 @@ Sourced by disassembling the installed `claude` binary (`strings` on the Mach-O)
 
 ## Where the script lives
 
-- **Ad-hoc `ultracode` run:** the script is NOT a standalone file. It's embedded in the session transcript as a `Workflow` tool_use with a `script` field:
+- **Ad-hoc `ultracode` run:** every run writes its script to a file under the session's directory in `~/.claude/projects/`, and Claude receives that path when the run starts (so you can just ask for it). The `Workflow` tool_use in the session transcript also carries the script inline in its `script` field:
   `~/.claude/projects/<path-slug>/<session-uuid>.jsonl`.
-  Extract it: iterate the JSONL, find `message.content[]` entries where `type=="tool_use"` and `name=="Workflow"`, read `input.script`.
-- **Saved workflow** (`s` in the `/workflows` viewer, or "save as command"): becomes a slash command under `.claude/commands/<name>.md`.
+  Extract it from the transcript: iterate the JSONL, find `message.content[]` entries where `type=="tool_use"` and `name=="Workflow"`, read `input.script`.
+- **Saved workflow** (`s` in the `/workflows` viewer): written to `.claude/workflows/<name>` in the project (shared) or `~/.claude/workflows/<name>` in your home dir (personal) — NOT `.claude/commands/`. It then runs as the slash command `/<name>`.
 - **Bundled** (`/deep-research`): compiled into the binary.
 
 ## How it executes
@@ -49,8 +49,8 @@ Distinctive moves from its source:
 ls ~/.claude/projects/  # dir names are the cwd path with / → -
 # pull every Workflow script out of a session
 python3 - <<'EOF'
-import json
-f="$HOME/.claude/projects/<slug>/<uuid>.jsonl"
+import json, os
+f = os.path.expandvars("$HOME/.claude/projects/<slug>/<uuid>.jsonl")
 for line in open(f):
     o=json.loads(line); msg=o.get("message",{})
     for c in (msg.get("content") or []) if isinstance(msg,dict) else []:
