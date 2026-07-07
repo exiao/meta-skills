@@ -34,6 +34,15 @@ A skill is only as good as what the agent remembers between runs. These three gi
 | **[memory-gc](memory-gc/)** | The nightly maintenance pass. Decays entries by age, drains the spillover queue, collapses near-duplicates and project-namespace sprawl, relocates project facts to topic files, and holds hot memory under a size target. Ships a deterministic pre-prune script. |
 | **[recall](recall/)** | Answer "when did we…?" questions by walking storage cheapest-first (hot memory, then topic files, then dated episodes, then raw transcripts) and stopping as soon as more searching stops improving the answer. Includes an anti-hallucination pattern so the agent never invents history. |
 
+## Orchestration
+
+Running many agents reliably is its own problem. These two cover durable, fault-tolerant multi-agent workflows: one native, one via Claude Code.
+
+| Skill | What it does |
+|-------|--------------|
+| **[delegate-workflow](delegate-workflow/)** | Build a durable multi-agent workflow as a checkpointing driver script instead of orchestrating turn-by-turn. Each agent call is a tool-less LLM call whose result is checkpointed to disk, so a crash mid-run resumes without re-doing completed work. Adds structured retry and an adversarial cross-check pass. Ships a crash-tested reference driver. |
+| **[claude-workflows](claude-workflows/)** | Invoke Claude Code dynamic workflows (`ultracode`) headlessly to orchestrate subagents at scale. Covers the trigger keyword, the mandatory `Workflow` tool allowance, forcing a cheap model, and the `--max-budget-usd` estimate trap. Includes a reference documenting the workflow runtime internals reverse-engineered from the binary. |
+
 ## Why eval-driven
 
 The core idea across `skill-improver`, `agent-improver`, and `optimize-prompt`: **the fix for an unreliable skill isn't rewriting it from intuition, it's measurement.**
