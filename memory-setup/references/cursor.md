@@ -95,7 +95,11 @@ set -uo pipefail
 input="$(cat 2>/dev/null || true)"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MEM="$REPO/.cursor/memory"
-T="$(printf '%s' "$input" | jq -r '.transcript_path // .transcript // empty' 2>/dev/null || true)"
+if command -v jq >/dev/null 2>&1; then
+  T="$(printf '%s' "$input" | jq -r '.transcript_path // .transcript // empty' 2>/dev/null || true)"
+else
+  T=""
+fi
 [ -n "$T" ] && [ -f "$T" ] || exit 0
 
 DATE="$(date +%F)"
