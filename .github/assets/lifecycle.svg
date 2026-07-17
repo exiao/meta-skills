@@ -38,13 +38,12 @@
     <rect x="850" y="200" width="280" height="360" rx="16" fill="#faf9f5" stroke="#e8e6dc" stroke-width="1.5"/>
     <text x="876" y="244" class="ui" font-size="13" fill="#c96442" letter-spacing="2" font-weight="600">03 · IMPROVE</text>
     <text x="876" y="284" class="label" font-size="28" fill="#141413" font-weight="500">skill-improver</text>
-    <line x1="876" y1="308" x2="1104" y2="308" stroke="#e8e6dc" stroke-width="1"/>
-    <text x="876" y="344" class="ui" font-size="14" fill="#141413">1 · run it N times</text>
-    <text x="876" y="372" class="ui" font-size="14" fill="#141413">2 · score every output</text>
-    <text x="876" y="400" class="ui" font-size="14" fill="#141413">3 · mutate one thing</text>
-    <text x="876" y="428" class="ui" font-size="14" fill="#141413">4 · keep it only if</text>
-    <text x="896" y="450" class="ui" font-size="14" fill="#c96442">the score improves</text>
-    <text x="876" y="486" class="ui" font-size="14" fill="#87867f" font-style="italic">repeat</text>
+    <text x="876" y="320" class="ui" font-size="15" fill="#5e5d59">1 · run it N times</text>
+    <text x="876" y="346" class="ui" font-size="15" fill="#5e5d59">2 · score every output</text>
+    <text x="876" y="372" class="ui" font-size="15" fill="#5e5d59">3 · mutate one thing</text>
+    <text x="876" y="398" class="ui" font-size="15" fill="#5e5d59">4 · keep it only if</text>
+    <text x="898" y="422" class="ui" font-size="15" fill="#c96442">the score improves</text>
+    <text x="876" y="460" class="ui" font-size="15" fill="#87867f" font-style="italic">repeat</text>
   </g>
 
   <!-- Stage 4: TEST -->
