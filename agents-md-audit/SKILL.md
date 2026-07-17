@@ -17,15 +17,23 @@ Tools built for Claude Code (e.g. ccmd) assume the file is **re-sent on every tu
 
 Run these seven checks against the file. They catch problems no content rubric sees.
 
-### H1: The 20KB truncation cap (highest-value check)
-`context_file_max_chars` defaults to **20,000 chars (~7,000 tokens)**. A file over the cap is head/tail truncated: **70% head + 20% tail kept, the middle 10% DROPPED**, with a marker where the hole is. The dropped middle is invisible to the agent for the whole session.
+### H1: The truncation cap (highest-value check)
+`context_file_max_chars` defaults to **20,000 chars (~7,000 tokens)**. A file over the cap is head/tail truncated: **70% of the cap from the head plus 20% from the tail are kept**, with a marker where the gap is. The whole span between those retained portions is invisible to the agent for the session.
 
-**Check the local override FIRST:** `grep context_file_max_chars ~/.hermes/config.yaml`. An instance that raises the cap (e.g. to 80,000) loads a 64-73KB AGENTS.md whole. Audit local truncation against the configured cap; cite the 20K default only as the portability number (other installs/harnesses).
+**Resolve the loaded file and local cap FIRST.** Use the first existing file in Hermes priority order; every H1/H3 command below must inspect that selected path, not a hard-coded `AGENTS.md`. An instance that raises the cap (for example, to 80,000) loads a 64–73KB file whole. Audit local truncation against the configured cap; cite the 20K default only as the portability number for other installs/harnesses.
 
 ```bash
-wc -c AGENTS.md   # >20000 = truncated; >18000 = flag, near the edge
+context_file=$(for f in .hermes.md HERMES.md AGENTS.md CLAUDE.md .cursorrules; do
+  [ -f "$f" ] && { printf '%s\n' "$f"; break; }
+done)
+[ -n "$context_file" ] || { echo "No Hermes context file found" >&2; exit 1; }
+cap=$(awk -F: '/^[[:space:]]*context_file_max_chars[[:space:]]*:/{gsub(/[[:space:]]/, "", $2); print $2}' ~/.hermes/config.yaml 2>/dev/null | tail -n 1)
+cap=${cap:-20000}
+size=$(wc -c < "$context_file")
+head_chars=$((cap * 70 / 100)); tail_chars=$((cap * 20 / 100))
+printf '%s: %s chars; cap=%s; retained head=%s, tail=%s\n' "$context_file" "$size" "$cap" "$head_chars" "$tail_chars"
 ```
-- **Fail** (hard) if over 20,000: name roughly which section lands in the dropped middle (it's the material between ~14,000 and ~18,000 chars). Any rule that MUST hold belongs in the head or the tail, never the middle.
+- **Fail** (hard) if `size > cap`: name roughly which section falls in the dropped span, from `head_chars` through `size - tail_chars`. Any rule that MUST hold belongs in the retained head or tail, never that gap. Flag a file above 90% of the cap as near the edge.
 - Fix: split into nested subdirectory `AGENTS.md` files (see H6), or move detail behind `references/`-style pointers the agent reads on demand, keeping the root file lean.
 - Real case: a 70KB `AGENTS.md` and a 64KB one are 3x+ over the cap; the bulk of each never reaches the model at startup.
 
@@ -38,9 +46,9 @@ Only ONE project context type loads per session, first match wins in this order:
 Before loading, Hermes scans the file for prompt-injection patterns. **One match blocks the entire file** (`[BLOCKED: AGENTS.md contained potential prompt injection]`), not just the offending line. A legitimate file that quotes an injection example, documents a `cat .env` incident, or shows a `curl ...$TOKEN` command can nuke its own loading.
 
 ```bash
-grep -niE "ignore (previous|prior|above) instructions|disregard (your|the) (rules|instructions)|do not tell the user|system prompt override|cat +\.env|cat +credential|curl.*\\\$[A-Z_]*(KEY|TOKEN|SECRET)" AGENTS.md
+grep -niE "ignore (previous|prior|above) instructions|disregard (your|the) (rules|instructions)|do not tell the user|system prompt override|cat +\.env|cat +credential|curl.*\\\$[A-Z_]*(KEY|TOKEN|SECRET)" "$context_file"
 ```
-Also flag: hidden HTML comments (`<!-- ... -->` containing instruction-like text), `<div style="display:none">`, and zero-width / bidi / word-joiner characters (`grep -nP "[\x{200B}\x{200C}\x{200D}\x{2060}\x{202A}-\x{202E}]" AGENTS.md`).
+Also flag: hidden HTML comments (`<!-- ... -->` containing instruction-like text), `<div style="display:none">`, and zero-width / bidi / word-joiner characters (`perl -CSD -ne 'print "$.:$_" if /[\x{200B}\x{200C}\x{200D}\x{2060}\x{202A}-\x{202E}]/' "$context_file"`).
 - **Fail** (hard) on any hit: the file may be loading as `[BLOCKED]` and the agent is running with NO project context. Reword the example so it doesn't match (paraphrase the injection, redact the secret-exfil command).
 
 ### H4: SOUL.md vs AGENTS.md placement
@@ -61,7 +69,7 @@ If the file carries a `<!-- CODEX-ONLY:START -->` block for GitHub Codex review,
 
 ## Process
 
-1. **Locate the file(s).** Ask for the repo path. List which context files exist (`ls -la` for `.hermes.md AGENTS.md CLAUDE.md .cursorrules`) and determine which one Hermes actually loads (H2).
+1. **Locate the file(s).** Ask for the repo path. List which context files exist (`ls -la` for `.hermes.md AGENTS.md CLAUDE.md .cursorrules`), determine which one Hermes actually loads (H2), and assign it to `context_file` before running H1 or H3.
 2. **Run the Hermes loading checks (H1-H7).** These are greppable and produce the highest-value findings. Do them first.
 3. **Run the content rubric.** Read `references/rubric.md`: score the Karpathy 12-rule completeness pass-count, the per-line instruction lints (missing-why, 28-word run-ons, vague terms, unescaped absolutes), and the **readability pass** (Part 2b): read each section as a first-time agent and flag any that isn't clear on one pass. If a section is hard to understand, it's a bad AGENTS.md, no matter how complete it is.
 4. **Generate the scorecard.** Format below.

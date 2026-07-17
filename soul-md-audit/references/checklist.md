@@ -58,7 +58,7 @@ Decide which archetype this is first, because "commands don't belong in SOUL" is
 ### P2: No diluted restatement of one instruction
 - The same behavioral rule isn't re-expressed 3+ times in near-synonyms across sections (e.g. "be direct" / "don't coddle" / "clarity first" / "useful beats agreeable" as four separate passes at one idea).
 - **Why:** models routinely fail to reconcile overlapping demands inside one prompt, and longer prompts raise derailment probability (2502.12197, 2602.17046). Restating one idea five ways spends attention budget without adding a constraint, and it shoves real rules toward the truncated middle.
-- **Not a fail:** a single optional closing echo of the 2-3 hard rules (recency is real; one short restatement is fine). The line is a *scored requirement* to restate: P1 does not demand one, and P2 fails a rule smeared across the body.
+- **Not a fail:** a single optional closing echo of the 2-3 hard rules (recency is real; one short restatement is fine). There is no *scored requirement* to restate: P1 does not demand one, and P2 fails a rule smeared across the body.
 - **Pass:** each behavioral rule stated once, in one place.
 - **Fail:** one idea smeared across 3+ near-synonym restatements. Fix = merge into a single canonical line.
 
