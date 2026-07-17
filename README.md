@@ -6,7 +6,7 @@
 
 Most agent skills are written once and never measured. They work maybe 70% of the time, and the other 30% you get garbage you only notice in production. This is a small toolkit for treating skills like software you can actually engineer: draft them, audit them against a checklist, then run them dozens of times against real evals and keep only the changes that measurably help.
 
-These are [agent skills](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview) to teach your AI agents how to make skills based pn best practices. They work with [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Hermes Agent](https://github.com/NousResearch/hermes-agent), Codex, and other skill-aware agents.
+These are [agent skills](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview) to teach your AI agents how to make skills based on best practices. They work with [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Hermes Agent](https://github.com/NousResearch/hermes-agent), Codex, and other skill-aware agents.
 
 These core skills cover the whole lifecycle of a skill, from first draft to measured reliability (plus a memory toolkit below so your agent remembers across runs):
 
