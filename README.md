@@ -20,8 +20,6 @@ The seven core skills cover the whole lifecycle of a skill, from first draft to 
 | **[skill-audit](skill-audit/)** | Score any skill against a structured checklist of gotchas. Outputs a scorecard with specific fixes. The fast first pass before you spend tokens optimizing. |
 | **[skill-tester](skill-tester/)** | Test an interactive skill by *running* it, not reviewing it. An agent plays both the AI agent and a user persona, capturing a full turn-by-turn transcript, then publishes them all raw to one static page. Shows you exactly where it breaks. |
 | **[skill-improver](skill-improver/)** | Improve your skill systematically by using ML techniques to hill climb on your evaluation test cases. |
-| **[agent-improver](agent-improver/)** | Same eval-driven mutation loop, but framework-agnostic. Auto-detects the agent type (ADK, LangChain, CrewAI, AutoGen, a raw HTTP API, or a CLI) and builds the right eval harness around it. Use when the thing you're improving isn't a markdown skill but a whole agent. |
-| **[mcporter](mcporter/)** | List, configure, authenticate, and call [MCP](https://modelcontextprotocol.io) servers and tools directly (HTTP or stdio). The plumbing for giving a skill real tools to call. |
 
 ## Memory
 
@@ -33,18 +31,9 @@ A skill is only as good as what the agent remembers between runs. These three gi
 | **[memory-gc](memory-gc/)** | The nightly maintenance pass. Decays entries by age, drains the spillover queue, collapses near-duplicates and project-namespace sprawl, relocates project facts to topic files, and holds hot memory under a size target. Ships a deterministic pre-prune script. |
 | **[recall](recall/)** | Answer "when did we…?" questions by walking storage cheapest-first (hot memory, then topic files, then dated episodes, then raw transcripts) and stopping as soon as more searching stops improving the answer. Includes an anti-hallucination pattern so the agent never invents history. |
 
-## Orchestration
-
-Running many agents reliably is its own problem. These two cover durable, fault-tolerant multi-agent workflows: one native, one via Claude Code.
-
-| Skill | What it does |
-|-------|--------------|
-| **[delegate-workflow](delegate-workflow/)** | Build a durable multi-agent workflow as a checkpointing driver script instead of orchestrating turn-by-turn. Each agent call is a tool-less LLM call whose result is checkpointed to disk, so a crash mid-run resumes without re-doing completed work. Adds structured retry and an adversarial cross-check pass. Ships a crash-tested reference driver. |
-| **[claude-workflows](claude-workflows/)** | Invoke Claude Code dynamic workflows (`ultracode`) headlessly to orchestrate subagents at scale. Covers the trigger keyword, the mandatory `Workflow` tool allowance, forcing a cheap model, and the `--max-budget-usd` estimate trap. Includes a reference documenting the workflow runtime internals reverse-engineered from the binary. |
-
 ## Why eval-driven
 
-The core idea across `skill-improver` and `agent-improver`: **the fix for an unreliable skill isn't rewriting it from intuition, it's measurement.**
+The core idea across `skill-improver`: **the fix for an unreliable skill isn't rewriting it from intuition, it's measurement.**
 
 1. Turn "good output" into specific evaluation criteria. Not "is this engaging?" (ungameable, subjective) but "does the first sentence contain a specific claim, not a generic statement?" (observable).
 2. Split your test inputs into train / validation / test so you can't fool yourself by overfitting.
@@ -69,7 +58,6 @@ git clone https://github.com/exiao/meta-skills
 
 - `skill-creator` is adapted from Anthropic's internal skill-creation tooling.
 - `skill-improver` builds on Karpathy's autoresearch pattern, [SkillOpt](https://arxiv.org/abs/2605.23904) (Microsoft Research), and the eval-writing practices from [howtoeval.com](https://www.howtoeval.com).
-- `mcporter` is a community CLI for the Model Context Protocol.
 
 ## License
 
