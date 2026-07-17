@@ -69,10 +69,10 @@
     <rect x="90" y="640" width="1420" height="120" rx="16" fill="#faf9f5" stroke="#e8e6dc" stroke-width="1.5"/>
     <text x="130" y="712" class="label" font-size="34" fill="#141413" font-weight="500">A skill that works 95% of the time</text>
     <!-- mini upward chart -->
-    <path d="M1230,726 C1272,721 1296,718 1322,713 C1352,707 1366,690 1400,676 C1436,661 1451,654 1478,647 L1478,742 L1230,742 Z" fill="url(#sparkFill)"/>
-    <path d="M1230,726 C1272,721 1296,718 1322,713 C1352,707 1366,690 1400,676 C1436,661 1451,654 1478,647" fill="none" stroke="#c96442" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="1478" cy="647" r="9" fill="#c96442" fill-opacity="0.18"/>
-    <circle cx="1478" cy="647" r="4.5" fill="#c96442"/>
+    <path d="M1232,728 C1276,724 1300,721 1326,716 C1356,710 1372,695 1404,685 C1436,675 1450,672 1466,670 L1466,746 L1232,746 Z" fill="url(#sparkFill)"/>
+    <path d="M1232,728 C1276,724 1300,721 1326,716 C1356,710 1372,695 1404,685 C1436,675 1450,672 1466,670" fill="none" stroke="#c96442" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="1466" cy="670" r="9" fill="#c96442" fill-opacity="0.18"/>
+    <circle cx="1466" cy="670" r="4.5" fill="#c96442"/>
   </g>
 
   <text x="90" y="820" class="ui" font-size="14" fill="#87867f">meta-skills · skills that build, test, and improve other agent skills</text>
