@@ -7,65 +7,73 @@
     <marker id="arw" markerWidth="12" markerHeight="12" refX="8" refY="4" orient="auto">
       <path d="M0,0 L8,4 L0,8 Z" fill="#c96442"/>
     </marker>
+    <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c96442" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#c96442" stop-opacity="0"/>
+    </linearGradient>
   </defs>
 
   <rect width="1600" height="900" fill="#f5f4ed"/>
 
   <!-- title -->
-  <text x="100" y="100" class="label" font-size="52" fill="#141413" font-weight="500">How a skill gets reliable</text>
-  <text x="100" y="142" class="ui" font-size="20" fill="#5e5d59">Draft it. Audit it. Then let evals do the convincing.</text>
+  <text x="90" y="100" class="label" font-size="52" fill="#141413" font-weight="500">Make reliable skills</text>
+  <text x="90" y="142" class="ui" font-size="20" fill="#5e5d59">Use meta-skills to create, audit, test, and improve your skills</text>
 
   <!-- Stage 1: CREATE -->
   <g>
-    <rect x="100" y="220" width="300" height="160" rx="16" fill="#faf9f5" stroke="#e8e6dc" stroke-width="1.5"/>
-    <text x="128" y="262" class="ui" font-size="13" fill="#c96442" letter-spacing="2" font-weight="600">01 · CREATE</text>
-    <text x="128" y="300" class="label" font-size="30" fill="#141413" font-weight="500">skill-creator</text>
-    <text x="128" y="332" class="ui" font-size="15" fill="#5e5d59">Write the failing test first.</text>
-    <text x="128" y="354" class="ui" font-size="15" fill="#5e5d59">Then draft the skill.</text>
+    <rect x="90" y="200" width="280" height="300" rx="16" fill="#faf9f5" stroke="#e8e6dc" stroke-width="1.5"/>
+    <text x="116" y="244" class="ui" font-size="13" fill="#c96442" letter-spacing="2" font-weight="600">01 · CREATE</text>
+    <text x="116" y="284" class="label" font-size="28" fill="#141413" font-weight="500">skill-creator</text>
+    <text x="116" y="320" class="ui" font-size="15" fill="#5e5d59">Write your test cases first,</text>
+    <text x="116" y="342" class="ui" font-size="15" fill="#5e5d59">then draft the skill.</text>
   </g>
 
   <!-- Stage 2: AUDIT -->
   <g>
-    <rect x="650" y="220" width="300" height="160" rx="16" fill="#faf9f5" stroke="#e8e6dc" stroke-width="1.5"/>
-    <text x="678" y="262" class="ui" font-size="13" fill="#c96442" letter-spacing="2" font-weight="600">02 · AUDIT</text>
-    <text x="678" y="300" class="label" font-size="30" fill="#141413" font-weight="500">skill-audit</text>
-    <text x="678" y="332" class="ui" font-size="15" fill="#5e5d59">Score against a checklist.</text>
-    <text x="678" y="354" class="ui" font-size="15" fill="#5e5d59">Get specific fixes back.</text>
+    <rect x="470" y="200" width="280" height="300" rx="16" fill="#faf9f5" stroke="#e8e6dc" stroke-width="1.5"/>
+    <text x="496" y="244" class="ui" font-size="13" fill="#c96442" letter-spacing="2" font-weight="600">02 · AUDIT</text>
+    <text x="496" y="284" class="label" font-size="28" fill="#141413" font-weight="500">skill-audit</text>
+    <text x="496" y="320" class="ui" font-size="15" fill="#5e5d59">Score your skill against</text>
+    <text x="496" y="342" class="ui" font-size="15" fill="#5e5d59">best practices.</text>
   </g>
 
-  <!-- Stage 3: IMPROVE (taller, the heart) -->
+  <!-- Stage 3: IMPROVE -->
   <g>
-    <rect x="1200" y="220" width="300" height="380" rx="16" fill="#141413" stroke="#141413"/>
-    <text x="1228" y="262" class="ui" font-size="13" fill="#d97757" letter-spacing="2" font-weight="600">03 · IMPROVE</text>
-    <text x="1228" y="300" class="label" font-size="30" fill="#faf9f5" font-weight="500">the eval loop</text>
-    <text x="1228" y="334" class="ui" font-size="15" fill="#b0aea5">skill-improver</text>
-    <text x="1228" y="356" class="ui" font-size="15" fill="#b0aea5">agent-improver</text>
-    <text x="1228" y="378" class="ui" font-size="15" fill="#b0aea5">optimize-prompt</text>
-    <line x1="1228" y1="400" x2="1472" y2="400" stroke="#30302e" stroke-width="1"/>
-    <text x="1228" y="432" class="ui" font-size="14" fill="#faf9f5">1 · run it N times</text>
-    <text x="1228" y="460" class="ui" font-size="14" fill="#faf9f5">2 · score every output</text>
-    <text x="1228" y="488" class="ui" font-size="14" fill="#faf9f5">3 · mutate one thing</text>
-    <text x="1228" y="516" class="ui" font-size="14" fill="#faf9f5">4 · keep it only if</text>
-    <text x="1248" y="538" class="ui" font-size="14" fill="#d97757">validation goes up</text>
-    <text x="1228" y="572" class="ui" font-size="14" fill="#b0aea5" font-style="italic">repeat until plateau</text>
+    <rect x="850" y="200" width="280" height="300" rx="16" fill="#faf9f5" stroke="#e8e6dc" stroke-width="1.5"/>
+    <text x="876" y="244" class="ui" font-size="13" fill="#c96442" letter-spacing="2" font-weight="600">03 · IMPROVE</text>
+    <text x="876" y="284" class="label" font-size="28" fill="#141413" font-weight="500">skill-improver</text>
+    <text x="876" y="320" class="ui" font-size="15" fill="#5e5d59">1 · run it N times</text>
+    <text x="876" y="346" class="ui" font-size="15" fill="#5e5d59">2 · score every output</text>
+    <text x="876" y="372" class="ui" font-size="15" fill="#5e5d59">3 · mutate one thing</text>
+    <text x="876" y="398" class="ui" font-size="15" fill="#5e5d59">4 · keep it only if</text>
+    <text x="898" y="422" class="ui" font-size="15" fill="#c96442">the score improves</text>
+    <text x="876" y="460" class="ui" font-size="15" fill="#87867f" font-style="italic">repeat</text>
+  </g>
+
+  <!-- Stage 4: TEST -->
+  <g>
+    <rect x="1230" y="200" width="280" height="300" rx="16" fill="#faf9f5" stroke="#e8e6dc" stroke-width="1.5"/>
+    <text x="1256" y="244" class="ui" font-size="13" fill="#c96442" letter-spacing="2" font-weight="600">04 · TEST</text>
+    <text x="1256" y="284" class="label" font-size="28" fill="#141413" font-weight="500">skill-tester</text>
+    <text x="1256" y="320" class="ui" font-size="15" fill="#5e5d59">Replay transcripts across</text>
+    <text x="1256" y="342" class="ui" font-size="15" fill="#5e5d59">long-range tasks.</text>
   </g>
 
   <!-- arrows between stages -->
-  <line x1="400" y1="300" x2="640" y2="300" stroke="#c96442" stroke-width="2.5" marker-end="url(#arw)"/>
-  <line x1="950" y1="300" x2="1190" y2="300" stroke="#c96442" stroke-width="2.5" marker-end="url(#arw)"/>
+  <line x1="372" y1="380" x2="468" y2="380" stroke="#c96442" stroke-width="2.5" marker-end="url(#arw)"/>
+  <line x1="752" y1="380" x2="848" y2="380" stroke="#c96442" stroke-width="2.5" marker-end="url(#arw)"/>
+  <line x1="1132" y1="380" x2="1228" y2="380" stroke="#c96442" stroke-width="2.5" marker-end="url(#arw)"/>
 
   <!-- outcome bar -->
   <g>
-    <rect x="100" y="680" width="1400" height="120" rx="16" fill="#faf9f5" stroke="#e8e6dc" stroke-width="1.5"/>
-    <text x="140" y="730" class="label" font-size="34" fill="#141413" font-weight="500">A skill that works 95%+ of the time</text>
-    <text x="140" y="766" class="ui" font-size="17" fill="#5e5d59">with the receipts to prove it: a results log, a changelog of every edit, and a held-out test score.</text>
+    <rect x="90" y="640" width="1420" height="120" rx="16" fill="#faf9f5" stroke="#e8e6dc" stroke-width="1.5"/>
+    <text x="130" y="712" class="label" font-size="34" fill="#141413" font-weight="500">A skill that works 95% of the time</text>
     <!-- mini upward chart -->
-    <polyline points="1230,770 1280,752 1320,758 1370,720 1420,700 1460,690" fill="none" stroke="#c96442" stroke-width="3"/>
-    <circle cx="1460" cy="690" r="5" fill="#c96442"/>
+    <path d="M1232,728 C1276,724 1300,721 1326,716 C1356,710 1372,695 1404,685 C1436,675 1450,672 1466,670 L1466,746 L1232,746 Z" fill="url(#sparkFill)"/>
+    <path d="M1232,728 C1276,724 1300,721 1326,716 C1356,710 1372,695 1404,685 C1436,675 1450,672 1466,670" fill="none" stroke="#c96442" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="1466" cy="670" r="9" fill="#c96442" fill-opacity="0.18"/>
+    <circle cx="1466" cy="670" r="4.5" fill="#c96442"/>
   </g>
 
-  <!-- loop-back arrow from improve down to outcome -->
-  <path d="M1350,600 L1350,672" stroke="#c96442" stroke-width="2.5" fill="none" marker-end="url(#arw)"/>
-
-  <text x="100" y="858" class="ui" font-size="14" fill="#87867f">meta-skills · skills that build, test, and improve other agent skills</text>
+  <text x="90" y="820" class="ui" font-size="14" fill="#87867f">meta-skills · skills that build, test, and improve other agent skills</text>
 </svg>
