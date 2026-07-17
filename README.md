@@ -8,7 +8,7 @@ Most agent skills are written once and never measured. They work maybe 70% of th
 
 These are [agent skills](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview) to teach your AI agents how to make skills based pn best practices. They work with [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Hermes Agent](https://github.com/NousResearch/hermes-agent), Codex, and other skill-aware agents.
 
-The seven core skills cover the whole lifecycle of a skill, from first draft to measured reliability (plus a memory toolkit below so your agent remembers across runs):
+These core skills cover the whole lifecycle of a skill, from first draft to measured reliability (plus a memory toolkit below so your agent remembers across runs):
 
 ![The skill lifecycle: create, audit, then improve with evals](.github/assets/lifecycle.png)
 
@@ -18,6 +18,8 @@ The seven core skills cover the whole lifecycle of a skill, from first draft to 
 |-------|--------------|
 | **[skill-creator](skill-creator/)** | Create a new skill from scratch or improve an existing one. Enforces a test-first workflow: write 3+ pressure scenarios that fail *without* the skill before you write a line of the skill itself. Includes an eval viewer to inspect runs. |
 | **[skill-audit](skill-audit/)** | Score any skill against a structured checklist of gotchas. Outputs a scorecard with specific fixes. The fast first pass before you spend tokens optimizing. |
+| **[soul-md-audit](soul-md-audit/)** | Score a `SOUL.md`, persona, or system-prompt against how the agent runtime loads it (identity slot, head/tail truncation, injection scanner) plus attention research (Lost-in-the-Middle, positional bias, redundancy, enforceability). The persona counterpart to skill-audit. |
+| **[agents-md-audit](agents-md-audit/)** | Score a repo's `AGENTS.md` / `CLAUDE.md` / `.cursorrules` against the runtime loading model (truncation cap, one-file-wins priority, injection tripwires, SOUL-vs-AGENTS placement) plus a Karpathy 12-rule completeness rubric and per-line instruction lints. |
 | **[skill-tester](skill-tester/)** | Test an interactive skill by *running* it, not reviewing it. An agent plays both the AI agent and a user persona, capturing a full turn-by-turn transcript, then publishes them all raw to one static page. Shows you exactly where it breaks. |
 | **[skill-improver](skill-improver/)** | Improve your skill systematically by using ML techniques to hill climb on your evaluation test cases. |
 | **[agent-improver](agent-improver/)** | Same eval-driven mutation loop, but framework-agnostic. Auto-detects the agent type (ADK, LangChain, CrewAI, AutoGen, a raw HTTP API, or a CLI) and builds the right eval harness around it. Use when the thing you're improving isn't a markdown skill but a whole agent. |
