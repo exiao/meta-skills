@@ -25,7 +25,7 @@ A live runtime checkout mixes durable skill improvements with generated state, p
    - `CHERRY`: keep the idea only after redaction, de-duplication, or moving to the right umbrella/reference.
 4. Secret/privacy scan the PR content before recommending any KEEP:
    ```bash
-   git grep -nE 'getbloom|investwithbloom|Fintary/|api\.fintary|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|srv-[a-z0-9]+|mn[0-9a-z]{20,}|ts[0-9a-z]{20,}' -- .
+   git grep -nE 'your-client-domain|api\.your-client|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|srv-[a-z0-9]+|mn[0-9a-z]{20,}|ts[0-9a-z]{20,}' -- .
    ```
    Adapt patterns for the repo. The point is to catch domains, account IDs, cron IDs, service IDs, handles, metrics snapshots, and active setup state.
 5. Look for structural regressions:

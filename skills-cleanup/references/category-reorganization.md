@@ -15,7 +15,10 @@ A category is bloat if any of the following hold:
 To audit quickly:
 ```python
 import os
-root = os.environ.get("REPO_ROOT", ".")
+import subprocess
+
+git_root = subprocess.getoutput("git rev-parse --show-toplevel").strip()
+root = os.environ.get("REPO_ROOT") or (git_root if os.path.isdir(git_root) else ".")
 for name in sorted(os.listdir(root)):
     path = os.path.join(root, name)
     if os.path.isdir(path) and not name.startswith("."):

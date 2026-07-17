@@ -34,6 +34,7 @@ Blind `git stash`, `git pull`, or `rsync --delete` can hide useful local work or
    ```bash
    rsync -a ~/.hermes/skills/ ~/projects/_worktrees/preserve-runtime-skills-$(date +%Y%m%d)/ \
      --exclude='.git/' \
+     --exclude='.curator_backups/' \
      --exclude='.curator_state' \
      --exclude='.hub/' \
      --exclude='.usage.json' \
@@ -65,6 +66,8 @@ Blind `git stash`, `git pull`, or `rsync --delete` can hide useful local work or
 7. Stage only selected preservation files, not stale tracked drift:
    ```bash
    git add --pathspec-from-file=/tmp/runtime_untracked_files.txt
+   # Stage verified, intentional tracked-file modifications separately.
+   git add -p
    git commit -m "chore: preserve local runtime skill additions"
    git push origin HEAD
    ```
