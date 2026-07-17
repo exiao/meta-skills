@@ -22,7 +22,6 @@ The seven core skills cover the whole lifecycle of a skill, from first draft to 
 | **[skill-improver](skill-improver/)** | Improve your skill systematically by using ML techniques to hill climb on your evaluation test cases. |
 | **[agent-improver](agent-improver/)** | Same eval-driven mutation loop, but framework-agnostic. Auto-detects the agent type (ADK, LangChain, CrewAI, AutoGen, a raw HTTP API, or a CLI) and builds the right eval harness around it. Use when the thing you're improving isn't a markdown skill but a whole agent. |
 | **[optimize-prompt](optimize-prompt/)** | The lightweight version: tune a single system prompt with one-change-at-a-time experiments. One artifact, one metric, keep what improves it, revert what doesn't. No harness required. |
-| **[mcporter](mcporter/)** | List, configure, authenticate, and call [MCP](https://modelcontextprotocol.io) servers and tools directly (HTTP or stdio). The plumbing for giving a skill real tools to call. |
 
 ## Memory
 
@@ -70,7 +69,6 @@ git clone https://github.com/exiao/meta-skills
 
 - `skill-creator` is adapted from Anthropic's internal skill-creation tooling.
 - `skill-improver` builds on Karpathy's autoresearch pattern, [SkillOpt](https://arxiv.org/abs/2605.23904) (Microsoft Research), and the eval-writing practices from [howtoeval.com](https://www.howtoeval.com).
-- `mcporter` is a community CLI for the Model Context Protocol.
 
 ## License
 
