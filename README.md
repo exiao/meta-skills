@@ -20,7 +20,6 @@ The seven core skills cover the whole lifecycle of a skill, from first draft to 
 | **[skill-audit](skill-audit/)** | Score any skill against a structured checklist of gotchas. Outputs a scorecard with specific fixes. The fast first pass before you spend tokens optimizing. |
 | **[skill-tester](skill-tester/)** | Test an interactive skill by *running* it, not reviewing it. An agent plays both the AI agent and a user persona, capturing a full turn-by-turn transcript, then publishes them all raw to one static page. Shows you exactly where it breaks. |
 | **[skill-improver](skill-improver/)** | Improve your skill systematically by using ML techniques to hill climb on your evaluation test cases. |
-| **[agent-improver](agent-improver/)** | Same eval-driven mutation loop, but framework-agnostic. Auto-detects the agent type (ADK, LangChain, CrewAI, AutoGen, a raw HTTP API, or a CLI) and builds the right eval harness around it. Use when the thing you're improving isn't a markdown skill but a whole agent. |
 | **[optimize-prompt](optimize-prompt/)** | The lightweight version: tune a single system prompt with one-change-at-a-time experiments. One artifact, one metric, keep what improves it, revert what doesn't. No harness required. |
 
 ## Memory
@@ -35,7 +34,7 @@ A skill is only as good as what the agent remembers between runs. These three gi
 
 ## Why eval-driven
 
-The core idea across `skill-improver`, `agent-improver`, and `optimize-prompt`: **the fix for an unreliable skill isn't rewriting it from intuition, it's measurement.**
+The core idea across `skill-improver` and `optimize-prompt`: **the fix for an unreliable skill isn't rewriting it from intuition, it's measurement.**
 
 1. Turn "good output" into specific evaluation criteria. Not "is this engaging?" (ungameable, subjective) but "does the first sentence contain a specific claim, not a generic statement?" (observable).
 2. Split your test inputs into train / validation / test so you can't fool yourself by overfitting.
