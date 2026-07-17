@@ -38,10 +38,8 @@
     <rect x="1200" y="220" width="300" height="380" rx="16" fill="#141413" stroke="#141413"/>
     <text x="1228" y="262" class="ui" font-size="13" fill="#d97757" letter-spacing="2" font-weight="600">03 · IMPROVE</text>
     <text x="1228" y="300" class="label" font-size="30" fill="#faf9f5" font-weight="500">the eval loop</text>
-    <text x="1228" y="334" class="ui" font-size="15" fill="#b0aea5">skill-improver</text>
-    <text x="1228" y="356" class="ui" font-size="15" fill="#b0aea5">agent-improver</text>
-    <text x="1228" y="378" class="ui" font-size="15" fill="#b0aea5">optimize-prompt</text>
-    <line x1="1228" y1="400" x2="1472" y2="400" stroke="#30302e" stroke-width="1"/>
+    <text x="1228" y="360" class="label" font-size="26" fill="#d97757" font-weight="500">skill-improver</text>
+    <line x1="1228" y1="392" x2="1472" y2="392" stroke="#30302e" stroke-width="1"/>
     <text x="1228" y="432" class="ui" font-size="14" fill="#faf9f5">1 · run it N times</text>
     <text x="1228" y="460" class="ui" font-size="14" fill="#faf9f5">2 · score every output</text>
     <text x="1228" y="488" class="ui" font-size="14" fill="#faf9f5">3 · mutate one thing</text>
