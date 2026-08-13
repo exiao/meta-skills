@@ -196,6 +196,8 @@ def run_single_query(
             process.wait()
 
     return triggered
+
+
 def run_eval(
     eval_set: list[dict],
     skill_name: str,
