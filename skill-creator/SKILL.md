@@ -70,8 +70,14 @@ Detailed guidance for each phase lives in `references/`:
 - `red-flags-stop-and-start-over.md`, when to bail
 - `skill-creation-checklist-tdd-adapted.md`, step-by-step checklist
 - `claude-search-optimization-cso.md`, CSO techniques for description optimization
-- `references/public-skills-repo-hygiene.md`, how to keep public skill repositories useful while moving only truly private runbooks to ignored internal storage
-- `references/installing-third-party-skills.md`, installing skills via `npx skills add` (single + whole multi-skill repos, enumerating real skill dirs by cloning rather than trusting screenshots), importing a vendor-shipped skill ZIP off a docs/API page (fetch+unzip+trim-to-conventions, and the dangling-cross-reference trap when you reshape the bundle's SKILL.md), integrating into the Hermes library (de-symlink, copy into a category, fix perms), enriching an installed skill with new upstream knowledge when there's no new package, the catalog generator's DESCRIPTION.md-needs-frontmatter pitfall, and fixing stale `~/clawd` → `~/.hermes` path references (incl. lost git-submodule projects)
+- `public-skills-repo-hygiene.md`, what stays public and what moves to private storage
+- `installing-third-party-skills.md`, installing via `npx skills add`, importing a vendor ZIP, and integrating into the Hermes library
+- `principles-vs-references.md`, what belongs in SKILL.md vs a reference
+- `inline-patch-safety.md`, editing a skill without breaking it
+- `red-phase-cold-subagent-for-tool-skills.md`, baselining a tool skill with a cold subagent
+- `trigger-eval-nested-false-negatives.md`, why a nested run scores 0.00 on everything
+- `trigger-eval-harness-pitfalls.md`, run_eval / run_loop gotchas
+- `manual-only-and-bypass-skills.md`, skills that shouldn't auto-trigger
 
 Only proceed to "Creating a skill" below after baseline results are documented.
 
@@ -495,7 +501,7 @@ This step matters, bad eval queries lead to bad descriptions.
 
 ### Step 3: Run the optimization loop
 
-> **Before trusting any score:** if you launch this loop from inside another agent session (the Hermes gateway, or any nested context), the trigger detector can give a flat **0.00 on every query**, a harness false negative, not a bad description. Run a quick control against a known-good skill first; if `simplify` also scores 0 on "run /simplify", the harness is blind here. See `references/trigger-eval-nested-claude-false-negatives.md`. Run trigger evals from a top-level Claude Code session.
+> **Before trusting any score:** if you launch this loop from inside another agent session (the Hermes gateway, or any nested context), the trigger detector can give a flat **0.00 on every query**, a harness false negative, not a bad description. Run a quick control against a known-good skill first; if `simplify` also scores 0 on "run /simplify", the harness is blind here. See `references/trigger-eval-nested-false-negatives.md`. Run trigger evals from a top-level Claude Code session.
 
 Tell the user: "This will take some time, I'll run the optimization loop in the background and check on it periodically."
 
@@ -513,8 +519,6 @@ python -m scripts.run_loop \
 Use the model ID from your system prompt (the one powering the current session) so the triggering test matches what the user actually experiences.
 
 While it runs, periodically tail the output to give the user updates on which iteration it's on and what the scores look like.
-
-**Pitfall, nested gateway runs give false negatives.** If every query (even strong should-trigger ones) scores `trigger_rate 0.00`, the harness is likely blind because `claude -p` is nested inside the gateway session, not your description failing. Run the control check and read the verdict guidance in `references/trigger-eval-nesting-false-negatives.md` BEFORE concluding the description undertriggers.
 
 This handles the full optimization loop automatically. It splits the eval set into 60% train and 40% held-out test, evaluates the current description (running each query 3 times to get a reliable trigger rate), then calls Claude to propose improvements based on what failed. It re-evaluates each new description on both train and test, iterating up to 5 times. When it's done, it opens an HTML report in the browser showing the results per iteration and returns JSON with `best_description`, selected by test score rather than train score to avoid overfitting.
 

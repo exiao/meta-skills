@@ -374,6 +374,8 @@ every output. The keep/discard decision is made by the **PACE acceptance gate**
 greedy rule is uncontrolled adaptive multiple testing, across a long run it
 p-hacks itself into churn. PACE is the mechanism this loop exists for; route every
 accept decision through it. See [references/pace-acceptance.md](references/pace-acceptance.md).
+For running this loop as a long-lived background lane, see
+[references/hill-climber-lane-runbook.md](references/hill-climber-lane-runbook.md).
 
 1. Build the **paired** per-instance reward arrays on the SAME validation instances,
    same order: `candidate_scores[i]` and `incumbent_scores[i]` (the incumbent =
