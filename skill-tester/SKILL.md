@@ -1,7 +1,7 @@
 ---
 name: skill-tester
 preloaded: true
-description: "Test an interactive lesson or course skill by self-play: one agent plays instructor and student, capturing full transcripts, then publishes to Surge. Use for run lesson transcripts or QA the course end to end. For web-app QA use dogfood."
+description: "Test a lesson or course skill by self-play, one agent as instructor and student. Use for run lesson transcripts or QA the course. For web apps use dogfood."
 
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: agents-md-audit
 preloaded: true
-description: "Audit and score a repo's agent context file (AGENTS.md, CLAUDE.md, .cursorrules) for how Hermes loads it, plus a completeness rubric and per-line lints. Use for audit my AGENTS.md or why isn't my AGENTS.md being followed. For SKILL.md use skill-audit."
+description: "Score an AGENTS.md, CLAUDE.md, or .cursorrules for how Hermes loads it. Use for audit my AGENTS.md or why isn't it being followed. For SKILL.md use skill-audit."
 
 ---
 
@@ -13,7 +13,13 @@ Read [references/rubric.md](references/rubric.md) first. It holds the Karpathy 1
 
 ## Why this is not a generic CLAUDE.md linter
 
-Tools built for Claude Code (e.g. ccmd) assume the file is **re-sent on every turn** and price token bloat as a per-turn tax. **Hermes does not work that way.** Per the [Hermes context-files docs](https://hermes-agent.nousresearch.com/docs/user-guide/features/context-files), Hermes loads ONE project context file ONCE at session start into the system prompt, then keeps that prompt byte-stable for the life of the conversation (prompt caching is sacred). So the every-turn cost model is wrong here, and the real failure modes are different: truncation, priority, and the injection scanner. Audit for those, not for per-turn dollars.
+Tools built for Claude Code (ccmd and similar) assume the file is re-sent every turn and price
+token bloat as a per-turn tax. Hermes does not work that way.
+
+Per the [Hermes context-files docs](https://hermes-agent.nousresearch.com/docs/user-guide/features/context-files),
+Hermes loads one project context file once at session start, then keeps the system prompt
+byte-stable for the whole conversation. The every-turn cost model doesn't apply. Audit for
+truncation, priority, and the injection scanner instead.
 
 ## The Hermes loading model (where the real findings are)
 
@@ -51,7 +57,12 @@ Per the [SOUL guide](https://hermes-agent.nousresearch.com/docs/guides/use-soul-
 - **Flag in SOUL** (should move to AGENTS), if auditing SOUL too: stack names, file paths, commands, ports, "never edit migrations." Rule of thumb: applies everywhere → SOUL; one project → AGENTS.
 
 ### H5: Cache-stability (lower severity on Hermes than on Claude Code)
-A volatile line near the top (an ISO date, "today", "this session", a churning version) does NOT re-bill every turn on Hermes (the prompt is loaded once and cached). But it still makes each fresh session start from a different prefix, and stale dated context is worse than none. **Warn, don't fail.** Move volatile lines to the bottom or drop them. (This is ccmd's `cache_bust` finding, demoted because Hermes's loading model makes it cheap.)
+A volatile line near the top (an ISO date, "today", "this session", a churning version) does not
+re-bill every turn on Hermes, since the prompt loads once and caches. It still makes each fresh
+session start from a different prefix, and stale dated context is worse than none.
+
+Warn, don't fail. Move volatile lines to the bottom or drop them. This is ccmd's `cache_bust`
+finding, demoted because Hermes's loading model makes it cheap.
 
 ### H6: Progressive subdirectory discovery (is nesting used well?)
 Hermes loads subdirectory `AGENTS.md` files on demand when the agent touches that subtree (capped at **8,000 chars** per subdir file, appended to the tool result). This is the correct fix for an over-cap root file (H1): move `frontend/`-specific rules into `frontend/AGENTS.md`, etc.
@@ -65,7 +76,11 @@ If the file carries a `<!-- CODEX-ONLY:START -->` block for GitHub Codex review,
 
 1. **Locate the file(s).** Ask for the repo path. List which context files exist (`ls -la` for `.hermes.md AGENTS.md CLAUDE.md .cursorrules`) and determine which one Hermes actually loads (H2).
 2. **Run the Hermes loading checks (H1-H7).** These are greppable and produce the highest-value findings. Do them first.
-3. **Run the content rubric.** Read `references/rubric.md`: score the Karpathy 12-rule completeness pass-count, the per-line instruction lints (missing-why, 28-word run-ons, vague terms, unescaped absolutes), and the **readability pass** (Part 2b): read each section as a first-time agent and flag any that isn't clear on one pass. If a section is hard to understand, it's a bad AGENTS.md, no matter how complete it is.
+3. **Run the content rubric** from `references/rubric.md`. Score the Karpathy 12-rule
+   completeness count, the per-line lints (missing-why, 28-word run-ons, vague terms, unescaped
+   absolutes), and the readability pass in Part 2b. Read each section as a first-time agent and
+   flag any that isn't clear on one pass. A hard-to-understand section is a bad AGENTS.md
+   however complete it is.
 4. **Generate the scorecard.** Format below.
 5. **Offer to fix.** List actions in priority order, hard fails first (H1 truncation, H3 injection block). Ask before editing.
 
@@ -97,7 +112,16 @@ If the file carries a `<!-- CODEX-ONLY:START -->` block for GitHub Codex review,
 
 ## Scoring
 
-Two independent scores, don't blend them. **Hermes loading** is pass/fail per H1-H7; any hard fail (H1 over-cap, H3 injection block) means the file is materially broken regardless of content quality, say so first. **Content** is the 12-rule completeness count plus the line-lint tally from `references/rubric.md`. A file can score 11/12 on content and still be a hard fail because it's 60KB and half of it never loads. Report the loading verdict before the content grade.
+Two independent scores. Don't blend them.
+
+**Hermes loading** is pass/fail per H1-H7. A hard fail (H1 over-cap, H3 injection block) means
+the file is materially broken whatever its content quality, so say that first.
+
+**Content** is the 12-rule completeness count plus the line-lint tally from
+`references/rubric.md`.
+
+A file can score 11/12 on content and still hard-fail because it's 60KB and half never loads.
+Report the loading verdict before the content grade.
 
 ## Gotchas
 
