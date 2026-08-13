@@ -29,6 +29,7 @@ def check(name, cond, detail=""):
 SKILL = "meta-ads-cli"
 BODY = ("This skill does many things. " * 200)[:3000]   # > MAX_INPUT, like a real body
 REAL_ASK = "pause the retargeting campaign and report yesterday's spend"
+SENDER_ASK = "raise the daily budget on the prospecting campaign to 200"
 
 TURNS = [
     # 1. This skill's invocation: real ask lives after the marker, body must not leak.
@@ -40,6 +41,9 @@ TURNS = [
     # 3. An ordinary user ask naming the skill: still mined, unchanged.
     {"role": "user", "content": f"can you run {SKILL} against the new account"},
     {"role": "assistant", "content": "done"},
+    # 4. An invocation behind the "[Sender] " tag JSONL transcripts prepend.
+    {"role": "user", "content": f'[Alice] [SYSTEM: The user has invoked the "{SKILL}" skill.]\n\n{BODY}\n\n{SKILL_INSTR_MARKER}{SENDER_ASK}'},
+    {"role": "assistant", "content": "Raised it."},
 ]
 
 with tempfile.TemporaryDirectory() as td:
@@ -63,6 +67,8 @@ check("another skill's invocation is dropped",
       f"got {inputs!r}")
 check("ordinary ask naming the skill is still mined",
       any("run meta-ads-cli against the new account" in i for i in inputs), f"got {inputs!r}")
+check("a sender-tagged invocation still yields the instruction, not the body",
+      SENDER_ASK in inputs, f"got {inputs!r}")
 check("invocation candidate is high-confidence with the invocation reason",
       any(c["confidence"] == "high" and "explicit skill invocation" in c["match"]
           for c in got if c["task_input"] == REAL_ASK), f"got {got!r}")

@@ -46,42 +46,45 @@ for ev in (
 
 EVAL_SET = [{"query": f"query {i}", "should_trigger": True} for i in range(6)]
 
-with tempfile.TemporaryDirectory() as td:
-    root = pathlib.Path(td)
-    (root / ".claude" / "skills").mkdir(parents=True)
-    bin_dir = root / "bin"
-    bin_dir.mkdir()
-    stub = bin_dir / "claude"
-    stub.write_text(STUB_CLAUDE)
-    stub.chmod(0o755)
-    os.environ["PATH"] = f"{bin_dir}{os.pathsep}{os.environ['PATH']}"
+# Guarded: with spawn/forkserver start methods (POSIX default from 3.14) the
+# pool's children re-run this module, which would re-enter run_eval.
+if __name__ == "__main__":
+    with tempfile.TemporaryDirectory() as td:
+        root = pathlib.Path(td)
+        (root / ".claude" / "skills").mkdir(parents=True)
+        bin_dir = root / "bin"
+        bin_dir.mkdir()
+        stub = bin_dir / "claude"
+        stub.write_text(STUB_CLAUDE)
+        stub.chmod(0o755)
+        os.environ["PATH"] = f"{bin_dir}{os.pathsep}{os.environ['PATH']}"
 
-    out = run_eval(EVAL_SET, "probe", "test description", num_workers=6,
-                   timeout=30, project_root=root, runs_per_query=2)
+        out = run_eval(EVAL_SET, "probe", "test description", num_workers=6,
+                       timeout=30, project_root=root, runs_per_query=2)
 
-    counts = {int(n) for n in (root / "probe-counts.log").read_text().split()}
-    leftover = list((root / ".claude" / "skills").iterdir())
+        counts = {int(n) for n in (root / "probe-counts.log").read_text().split()}
+        leftover = list((root / ".claude" / "skills").iterdir())
 
-check("exactly one probe skill is visible to every concurrent worker",
-      counts == {1}, f"observed probe counts {sorted(counts)}")
-check("every worker's invocation is scored as triggered",
-      all(r["trigger_rate"] == 1.0 for r in out["results"]),
-      f"{out['summary']['passed']}/{out['summary']['total']} passed")
-check("the shared probe is removed after the pool drains",
-      leftover == [], f"leftover {[p.name for p in leftover]}")
+    check("exactly one probe skill is visible to every concurrent worker",
+          counts == {1}, f"observed probe counts {sorted(counts)}")
+    check("every worker's invocation is scored as triggered",
+          all(r["trigger_rate"] == 1.0 for r in out["results"]),
+          f"{out['summary']['passed']}/{out['summary']['total']} passed")
+    check("the shared probe is removed after the pool drains",
+          leftover == [], f"leftover {[p.name for p in leftover]}")
 
-# The probe directory exists only inside the context manager.
-with tempfile.TemporaryDirectory() as td2:
-    root2 = pathlib.Path(td2)
-    with registered_probe(root2, "probe", "desc") as name:
-        inside = sorted(p.name for p in (root2 / ".claude" / "skills").iterdir())
-    after = list((root2 / ".claude" / "skills").iterdir())
-check("registered_probe creates one named probe and cleans it up",
-      inside == [name] and after == [], f"inside={inside} after={after}")
+    # The probe directory exists only inside the context manager.
+    with tempfile.TemporaryDirectory() as td2:
+        root2 = pathlib.Path(td2)
+        with registered_probe(root2, "probe", "desc") as name:
+            inside = sorted(p.name for p in (root2 / ".claude" / "skills").iterdir())
+        after = list((root2 / ".claude" / "skills").iterdir())
+    check("registered_probe creates one named probe and cleans it up",
+          inside == [name] and after == [], f"inside={inside} after={after}")
 
-print()
-if FAILS:
-    print(f"RESULT: {len(FAILS)} FAILED -> {FAILS}")
-    sys.exit(1)
-print("RESULT: all assertions passed")
-sys.exit(0)
+    print()
+    if FAILS:
+        print(f"RESULT: {len(FAILS)} FAILED -> {FAILS}")
+        sys.exit(1)
+    print("RESULT: all assertions passed")
+    sys.exit(0)

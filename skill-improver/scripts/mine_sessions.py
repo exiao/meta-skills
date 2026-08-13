@@ -312,6 +312,13 @@ def mine_sessions_jsonl(skill_name: str, terms: list[str], phrases: list[str], m
             # write that body (truncated) as task_input instead of the real ask.
             # Extract the instruction after the marker, and drop other skills'
             # invocations outright.
+            # JSONL user turns may carry a "[Sender] " tag ahead of the system
+            # marker that SKILL_INVOKE_RE is anchored on. Drop it only when doing
+            # so exposes an invocation, so BOILERPLATE still sees other bracketed
+            # lead-ins ("[Alice] [System note: ...]") with one prefix left to match.
+            unsent = clean_user(raw)
+            if SKILL_INVOKE_RE.match(unsent):
+                raw = unsent
             parsed = strip_skill_prefix(raw)
             confidence_override = None
             if parsed is not None:
