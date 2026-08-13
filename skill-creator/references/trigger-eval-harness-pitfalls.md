@@ -26,9 +26,11 @@ up in `skills[]`. The two mechanisms used to be one and got split.
 - Proof: write the same probe to each location and inspect `head -1` of the
   stream-json init event — `commands/` → present in `slash_commands`, absent from
   `skills`; `skills/<name>/SKILL.md` → present in `skills`.
-- Fix (already applied): `run_single_query` writes
-  `.claude/skills/<clean_name>/SKILL.md` and the `finally` block does
-  `shutil.rmtree(project_skills_dir, ignore_errors=True)`.
+- Fix (already applied): the probe is registered once per eval run at
+  `.claude/skills/<clean_name>/SKILL.md` by `registered_probe`, and removed when
+  the worker pool drains. Registration is deliberately NOT per worker: with
+  `--num-workers 10`, ten identically-described probes in one project let a
+  worker invoke a sibling's name and score itself as not-triggered.
 
 ## Bug 2 — timeout too short for an agentic run
 The probe runs a REAL `claude -p` agent, which needs ~15-30s just to make its
