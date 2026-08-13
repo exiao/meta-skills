@@ -53,6 +53,47 @@ When auditing a public skills repo, classify each questionable skill into one of
 
 Prefer class-level public skills over one-project aliases. If a public skill is useful but carries a private project name in filenames or examples, rename files and examples to generic terms (`click-to-whatsapp.md`, `$APP_NAME`, `$PROJECT_ROOT`, `$AD_ACCOUNT_ID`) rather than moving the whole skill.
 
+## Spinning out a NEW standalone public repo (not a PR to the existing skills repo)
+
+When the user asks to create a fresh public repo from a subset of skills (e.g. a curated
+showcase to share on LinkedIn), the hygiene above still applies, plus:
+
+- **Exclude internal-only skills entirely**, don't try to sanitize them. Housekeeping/runbook
+  skills tied to the private runtime (e.g. `skill-preloading`, `skills-cleanup`) leak internal
+  paths (`~/.hermes/...`), branch names, repo issue numbers, and the user's private skill
+  inventory, and have near-zero value to outsiders. Drop them and TELL the user you did, framed
+  as reversible. Keep only the genuinely reusable skills.
+- **Copy folders, not contents.** `cp -R ~/src/category/*/ dest/` flattens each skill's contents
+  (references/, scripts/) into the destination and loses the per-skill folder. Loop instead:
+  `for d in src/*/; do cp -R "$d" "dest/$(basename "$d")"; done`. Verify each dest skill still has
+  its own `SKILL.md`.
+- **Genericize runtime-specific example paths** in kept skills (`~/.hermes/skills/foo` →
+  `skills/foo`) so the skill reads as portable. Leave documented public-product paths
+  (e.g. Hermes Agent's `~/.hermes/sessions/`, `~/.claude/`) alone, those aren't personal data.
+- **Write a sharp, share-ready README**, not a bare file list: a one-line hook, the lifecycle/
+  story the skills form together, a per-skill table (what each does), and a credits/license
+  section. This is the artifact the user actually shares.
+- **Ship visuals in the user's visual identity** (`~/.hermes/VISUAL-IDENTITY.md`): a hero/banner
+  and a concept diagram. The user rejects generic dark-mode tech aesthetics. Build diagrams as
+  hand-authored SVG to PNG (`rsvg-convert -w W -h H in.svg -o out.png`) in the warm editorial
+  palette (parchment `#f5f4ed`, EB Garamond headlines, terracotta `#c96442` accent), and
+  generate hero images on-brand. Verify every visual with a vision check before committing
+  (no garbled AI text, no layout breaks). Store under `.github/assets/` and embed in the README.
+- **Create + push as the right account:** `gh-as exiao gh repo create exiao/<name> --public
+  --source=. --remote=origin --push`. Then verify assets actually pushed
+  (`gh-as exiao gh api repos/exiao/<name>/contents/.github/assets --jq '.[].name'`).
+- **Flag unverified citations** the original skills carry (e.g. an arxiv ID or source URL you
+  didn't confirm) BEFORE the user puts their name on it publicly. Offer to fact-check.
+
+## Where deliverables (surge pages, HTML, diagrams) must match the user's visual identity
+
+Any skill that produces a visual deliverable (surge page, HTML report, diagram, share card)
+must default to the user's visual identity, NOT a generic dark-mode theme. The user rejected a
+dark-mode report look outright ("I don't like aps-testing-report look"). Default to parchment
+background, EB Garamond serif headlines, General Sans body, JetBrains Mono code, terracotta
+accent. See `~/.hermes/VISUAL-IDENTITY.md` for the full token set. Build a skill's page generator
+with these tokens at `:root` from the start so a rebrand is a token edit, not a rewrite.
+
 For public editorial skills, personal voice samples and the author's name can be intentional fingerprints. Do not over-sanitize them unless the user asks. Remove unrelated private business identifiers, internal campaign names, private customer names, or operational IDs while preserving the voice and examples that make the skill work.
 
 Watch for duplicate skill names after moving local internal copies. If a private/internal runbook collides with a public skill name, rename the internal copy to the actual private class of work, e.g. `assistant-runtime` instead of another `hermes-agent`.

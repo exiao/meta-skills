@@ -11,6 +11,15 @@ Run pressure scenario with subagent WITHOUT the skill. Document exact behavior:
 
 This is "watch the test fail" - you must see what agents naturally do before writing the skill.
 
+> For a skill that teaches a **tool / CLI / API** (not a behavioral-compliance
+> skill), the RED test is different: delegate a fully COLD subagent with only the
+> invocation path + minimal config + a real task + "this is all the docs you
+> get," and read its honest "where I got stuck" report. A self-documenting tool
+> can make the baseline already good — which means the skill should be thin
+> (judgment, not commands), and the subagent's stumbles double as a tool-bug
+> list to fix BEFORE writing the skill. See
+> @red-phase-cold-subagent-for-tool-skills.md.
+
 ### GREEN: Write Minimal Skill
 
 Write skill that addresses those specific rationalizations. Don't add extra content for hypothetical cases.

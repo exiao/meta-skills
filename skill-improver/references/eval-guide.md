@@ -9,6 +9,7 @@ How to write eval criteria that actually improve your skills instead of giving y
 - [Good evals vs bad evals](#good-evals-vs-bad-evals)
 - [Common mistakes](#common-mistakes)
 - [Writing your evals: the 3-question test](#writing-your-evals-the-3-question-test)
+- [When the scorer is blind: qualitative axes need a human A/B gate](#when-the-scorer-is-blind-qualitative-axes-need-a-human-ab-gate)
 - [Refusal evals](#refusal-evals)
 - [Trajectory evals](#trajectory-evals)
 - [Golden cases](#golden-cases)
@@ -251,6 +252,50 @@ If the target skill has production history, review real executions before writin
 - User workaround "let me just do this manually" → eval for the step the user bypassed
 - Tool error swallowed silently → trajectory eval for error checking
 - Same failure three sessions in a row → golden case
+
+---
+
+## when the scorer is blind: qualitative axes need a human A/B gate
+
+Some quality dimensions cannot be captured by any deterministic check. Musical
+feel/flow/swing, prose voice, design taste, comedic timing, melodic surprise.
+A mechanical scorer measures *constraint compliance* (does the rhythm fill the
+bar, are the strong beats chord tones, is the JSON valid). It is structurally
+blind to whether the output actually *sounds/reads/looks* better.
+
+This matters most when you change a skill/prompt to improve a qualitative axis
+and then score it mechanically. Two traps:
+
+1. **A flat-or-negative score is NOT evidence the change was bad.** The change
+   may have moved an axis the scorer cannot see. Reporting "score dropped 0.02,
+   reverting" when the edit targeted *feel* is a false negative.
+2. **A change that improves feel can actively LOWER the mechanical score**,
+   because the feel-improving behavior fights the tidy compliance the scorer
+   rewards. Example from a music-lick prompt: "phrase across the bar line" and
+   "break up runs of equal notes" are exactly what makes a line swing, and they
+   reduced per-bar chord-tone-targeting compliance. Net mechanical score fell
+   while the lines plausibly sounded better. Worse, applying jazz-idiomatic
+   phrasing rules to cascade-based genres (R&B, bossa) dropped *their* scores
+   most: a domain-mismatch the number alone would have misread as "the change
+   is bad," when the real signal is "gate the rule to the genres it fits."
+
+**The fix: when optimizing a qualitative axis, add a mandatory human A/B step
+and say so out loud.**
+
+- Keep the mechanical scorer for the floor it CAN guard (validity, range,
+  duration fit, banned phrases). Never let it be the sole judge of feel.
+- Build a side-by-side before/after artifact the human can consume directly:
+  for audio, a page with playback (Tone.js) + notation (abcjs); for prose,
+  rendered pairs; for design, screenshots. Best-of-N per category so noise
+  doesn't dominate.
+- In the writeup, state plainly: "the scorer is deaf to X; decide by ear/eye."
+  Do not bury a -0.02 in a table and imply the change failed.
+- If the qualitative win is genre/context-specific, the clean follow-up is to
+  GATE the change to the contexts it fits, not to revert it wholesale.
+
+The general principle: **don't let a deterministic metric overrule the only
+axis that matters when that axis is outside the metric's reach.** Measure what
+you can, A/B the rest, report both honestly.
 
 ---
 

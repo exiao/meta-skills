@@ -26,16 +26,14 @@ Blind `git stash`, `git pull`, or `rsync --delete` can hide useful local work or
 2. Create a fresh preservation worktree from current main:
    ```bash
    cd ~/projects/skills
-   DATE_SUFFIX=$(date +%Y%m%d)
-   git worktree add ~/projects/_worktrees/preserve-runtime-skills-${DATE_SUFFIX} \
-     -b preserve-runtime-skills-${DATE_SUFFIX} origin/main
+   git worktree add ~/projects/_worktrees/preserve-runtime-skills-$(date +%Y%m%d) \
+     -b preserve-runtime-skills-$(date +%Y%m%d) origin/main
    ```
 
 3. Copy runtime files into the preservation worktree without deleting upstream files and excluding generated state:
    ```bash
-   rsync -a ~/.hermes/skills/ ~/projects/_worktrees/preserve-runtime-skills-${DATE_SUFFIX}/ \
+   rsync -a ~/.hermes/skills/ ~/projects/_worktrees/preserve-runtime-skills-$(date +%Y%m%d)/ \
      --exclude='.git/' \
-     --exclude='.curator_backups/' \
      --exclude='.curator_state' \
      --exclude='.hub/' \
      --exclude='.usage.json' \
@@ -45,7 +43,7 @@ Blind `git stash`, `git pull`, or `rsync --delete` can hide useful local work or
 
 4. Review the diff before staging. Treat tracked-file modifications as suspicious if they remove large amounts of current main content:
    ```bash
-   cd ~/projects/_worktrees/preserve-runtime-skills-${DATE_SUFFIX}
+   cd ~/projects/_worktrees/preserve-runtime-skills-$(date +%Y%m%d)
    git status --short
    git diff --stat origin/main
    git diff -- README.md | sed -n '1,220p'
@@ -67,8 +65,6 @@ Blind `git stash`, `git pull`, or `rsync --delete` can hide useful local work or
 7. Stage only selected preservation files, not stale tracked drift:
    ```bash
    git add --pathspec-from-file=/tmp/runtime_untracked_files.txt
-   # Stage verified, intentional tracked-file modifications separately.
-   git add -p
    git commit -m "chore: preserve local runtime skill additions"
    git push origin HEAD
    ```
