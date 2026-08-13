@@ -42,7 +42,8 @@ count_usage() {
   local last="-"
   if [[ -d "$EPISODES_DIR" ]]; then
     local ep_hits
-    ep_hits=$(grep -rli "\b${name}\b" "$EPISODES_DIR"/ 2>/dev/null || true)
+    ep_hits=$(find "$EPISODES_DIR" -type f -mtime "-$DAYS" -print0 \
+      | xargs -0 -r grep -li "\b${name}\b" 2>/dev/null || true)
     if [[ -n "$ep_hits" ]]; then
       count=$(echo "$ep_hits" | wc -l | tr -d ' ')
       last=$(echo "$ep_hits" | sort -r | head -1 | xargs basename 2>/dev/null | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1 || echo "-")
@@ -69,7 +70,9 @@ while IFS= read -r skillmd; do
   category_dir=$(dirname "$skill_dir")
   category=$(basename "$category_dir")
 
-  [[ "$category_dir" == "$SKILLS_DIR" ]] && continue
+  if [[ "$category_dir" == "$SKILLS_DIR" ]]; then
+    category="(flat)"
+  fi
 
   desc=$(extract_desc "$skillmd")
   desc_bytes=${#desc}
