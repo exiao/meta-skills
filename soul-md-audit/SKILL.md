@@ -1,13 +1,19 @@
 ---
 name: soul-md-audit
-description: "Audit and score a SOUL.md (Hermes agent identity file) or any agent persona / system-prompt / operator-instruction doc, against how Hermes loads it plus attention research. Use when the user shares a SOUL.md, persona file, agent constitution, or system-prompt and asks to review/grade/audit it, 'is this good', or 'compare to best practice'. Not for skills (use skill-audit)."
+preloaded: true
+description: "Score a SOUL.md, agent persona, or system prompt against how Hermes loads it. Use when someone shares a persona file to review or grade. Not for skills."
 ---
 
 # SOUL.md Audit
 
-Score a SOUL.md or agent persona/system-prompt file on two things at once: how Hermes loads and truncates it, and how the model reads and follows it. A SOUL.md can read well to a human and still fail. Half its rules may sit in the truncated middle. It may say "be direct" five different ways. It may be full of instructions the model has no way to obey.
+Score a SOUL.md or agent persona file on two things: how Hermes loads and truncates it, and how the model reads and follows it.
 
-Read [references/checklist.md](references/checklist.md) first. The research behind the attention items is in [references/attention-basis.md](references/attention-basis.md). Cite the paper when you flag one. When you recommend a rewrite, point the user at [references/template.md](references/template.md), the target shape that shows what good looks like, so the fix has a concrete goal and not just a list of problems.
+A file can read well to a human and still fail. Half its rules may sit in the truncated middle, it may say "be direct" five different ways, or it may carry instructions the model has no way to obey.
+
+Read [references/checklist.md](references/checklist.md) first. The research behind the attention
+items is in [references/attention-basis.md](references/attention-basis.md), cite the paper when
+you flag one. When recommending a rewrite, point at
+[references/template.md](references/template.md) so the fix has a concrete target shape.
 
 ## What this audits (and what it doesn't)
 
@@ -15,7 +21,9 @@ Use this for **identity, voice, and operator-behavior** files: `~/.hermes/SOUL.m
 
 **Classify the archetype first. It changes what counts as a fail:**
 - **Persona/voice SOUL** (a general assistant whose job is *who it is*): voice is the spine. Commands, paths, and project detail are drift that belongs in AGENTS.md.
-- **Task-operator SOUL** (a profile or lane with one main job it grabs skills for, like research-lead): the operational spine IS the identity. The primary objective, skill inventory, delegation workflow, command sequences, and folder map belong in SOUL, *unless a loaded AGENTS.md already owns them*. The right order runs: who you are, then primary objective, then how to behave and write, then skills, then workflows, then memory, then folders. Don't flag this content as drift. Judge whether it's ordered right and whether it has a better home that actually loads.
+- **Task-operator SOUL** (a profile or lane with one main job, like research-lead): the operational spine is the identity. Primary objective, skill inventory, delegation workflow, command sequences, and folder map all belong in SOUL, unless a loaded AGENTS.md already owns them.
+
+  Order runs: who you are, primary objective, how to behave and write, skills, workflows, memory, folders. Don't flag this content as drift. Judge whether it's ordered right and whether it has a better home that actually loads.
 
 If you're auditing a *skill*, use skill-audit instead. This skill borrows skill-audit's P-dimension research and applies it to persona and operator files, where truncation and identity-slot mechanics also matter.
 
@@ -32,10 +40,17 @@ When R1 fails or the user asks to make a SOUL clearer or shorter, run the file t
 `writer` skill under tight guardrails. The goal is meaning-preserving, not
 meaning-improving: tighten language and cut padding without loosening a single constraint.
 
-1. **Load the `writer` skill** and its WRITING-STYLE.md (kill-phrase list, plain-language rules). For the clarity and leanness definitions, also pull `evaluate-content` (Sweep 1 Clarity and the Seven Sweeps). Those are the canonical "what clear and lean mean"; don't invent a parallel bar. SOUL prose obeys the same style rules as any other writing in the author's voice. **If either optional skill is unavailable, do not dead-end:** use the local fallback in steps 2–5—preserve the constraint inventory, tighten only obvious padding and run-ons, and verify the before/after invariants—while stating that the canonical style pass was unavailable.
+1. **Load the `writer` skill** and its WRITING-STYLE.md for the kill-phrase list and
+   plain-language rules. For clarity and leanness, pull `evaluate-content` (Sweep 1) and
+   writer's `references/remove-chaff.md`. Those define the bar, don't invent a parallel one.
 2. **Inventory the constraints FIRST, before rewriting.** Extract every hard rule, gate, and never-do into a checklist. Grep for `never`, `only`, `always`, `must`, `block`, `don't`, `NOT`. This list is the ground truth the rewrite must preserve.
-3. **Rewrite prose, not structure.** writer tightens language, unstacks parentheticals, splits run-ons, strips inflated emphasis, and cuts filler. For a comprehension miss (unexplained jargon, an ambiguous "this", assumed context), *add* the missing gloss, antecedent, or fact rather than just cutting. It must NOT reorder sections, drop a section, merge two distinct rules, or soften a constraint's force. "never" stays "never".
-4. **Verify against the inventory.** Re-extract the constraint list from the rewrite and diff against step 2. Every rule present before must be present after. Any drop rejects *that edit*, not the whole pass. Report before/after char count and the constraint-count match as evidence. Run the check as greppable invariants, not eyeballing: count every token that must survive (item anchors, citation IDs, Pass/Fail lines, scoring numbers) with `grep -c` before and after and confirm the counts match. A prose rewrite that silently drops a citation or an anchor is the exact failure this step exists to catch.
+3. **Rewrite prose, not structure.** Tighten language, unstack parentheticals, split run-ons,
+   cut filler. For a comprehension miss (unexplained jargon, an ambiguous "this", assumed
+   context), add the missing gloss or fact rather than cutting. Never reorder sections, drop
+   one, merge two distinct rules, or soften a constraint. "never" stays "never".
+4. **Verify against the inventory.** Re-extract the constraint list from the rewrite and diff it against step 2. Every rule present before must be present after. A drop rejects that edit, not the whole pass.
+
+   Check greppable invariants rather than eyeballing. Count the tokens that must survive (item anchors, citation IDs, Pass/Fail lines, scoring numbers) with `grep -c` before and after, and confirm the counts match. A rewrite that silently drops a citation is what this step exists to catch. Report before/after char count and the constraint-count match.
 5. **Diff for review, don't overwrite blind.** Show the user a diff, or write to a `.simplified` sibling, and ask before replacing their real SOUL.md. Never edit `~/.hermes/SOUL.md` (or a profile's) without approval.
 
 ## How Hermes loads SOUL.md (the mechanics the audit checks)
@@ -44,7 +59,9 @@ These are the facts M1-M3 test against. Source: Hermes docs (context-files, use-
 
 - **Slot #1, injected verbatim.** SOUL.md is the agent's primary identity. It goes first in the system prompt and replaces the built-in default, with no wrapper text added. The content IS the identity, so sloppy content is the identity being sloppy.
 - **Loaded ONLY from `HERMES_HOME/SOUL.md`** (`~/.hermes/SOUL.md`). Hermes never checks the working directory for it, so a repo-local `SOUL.md` does nothing. When someone says "I edited it and nothing changed," they usually edited the wrong file or didn't restart the session.
-- **Truncation is head/tail, not tail-drop.** Files over `context_file_max_chars` (default 20,000, ~7k tokens) are cut to **70% head + 20% tail**, with a marker replacing the middle 10%. So the middle of a long SOUL is the first thing dropped. Front-load identity and hard constraints. In a long file the closing lines survive too, but the middle does not. **Check the local override first** (`grep context_file_max_chars ~/.hermes/config.yaml`): an instance that raises the cap (e.g. to 80,000) loads a 22KB SOUL whole; score truncation against the configured cap, cite the 20K default only for portability.
+- **Truncation is head/tail, not tail-drop.** Files over `context_file_max_chars` (default 20,000, ~7k tokens) keep 70% head and 20% tail, with a marker replacing the middle 10%. The middle of a long SOUL is the first thing dropped, so front-load identity and hard constraints.
+
+  Check the local override before scoring: `grep context_file_max_chars ~/.hermes/config.yaml`. One instance sets 80,000, which loads a 22KB SOUL whole. Score against the configured cap, and cite the 20K default only for portability.
 - **Injection-scanned before inclusion.** If the file contains patterns like "ignore previous instructions", "do not tell the user", `cat .env`, hidden HTML comments, or invisible/bidi characters, the WHOLE file is blocked and Hermes falls back to the default identity. A SOUL that trips the scanner silently disables itself.
 - **Empty = default.** An empty or whitespace-only SOUL.md means Hermes uses its built-in identity. The same happens under `skip_context_files` (subagents).
 - **SOUL vs AGENTS vs /personality.** SOUL is durable voice and identity that follows you everywhere. AGENTS.md holds per-project conventions, paths, and commands. `/personality` is a temporary session overlay. Mixing project detail into SOUL is the single most common mistake the docs call out.
@@ -83,11 +100,31 @@ These are the facts M1-M3 test against. Source: Hermes docs (context-files, use-
 - **Aspirational fiction is the signature SOUL.md failure.** Operator templates love lines like "make me notice," "create motion," "track my loop-closing rate across sessions." The model has no memory of your loop-closing rate and no way to make you notice. Flag these under P3: either wire them to a real tool, file, or tracked state, or cut them. Unenforceable rules train the model to treat the whole doc as vibes.
 - **Redundancy hides as thoroughness.** Four sections that each say "be sharp, be direct, don't coddle, useful beats agreeable" feel rigorous, but they are one instruction spending four times the attention budget and pushing real constraints toward the truncated middle. That's a P2 fail, not diligence.
 - **A closing restatement is optional, never required.** Repeating the 2-3 hard constraints at the very end is *allowed* (recency is real), but P1 does NOT score a file down for lacking one, and never demand the author add one. What P2 still fails is one idea smeared across the *body* in near-synonyms. Front-loading the hard rules at the top is the scored requirement; the end echo is a nicety, not an obligation.
-- **A true research finding is not automatically a scored rule.** P1 rests on the U-shaped attention curve, which says both the start AND the end get high attention. It's tempting to turn that into "so restate the bans at the end" and score files down for skipping it. That inference was rejected: a SOUL loaded once per session gains little from a mechanical end-echo, and requiring one manufactures the exact body-smear P2 exists to catch. The durable line: cite recency as real, front-load the hard rules (primacy + truncation-safety both point there), and leave the closing echo optional. When adapting any attention-research finding into a checklist item, ask whether it earns a *requirement* or just a *permission* before you make it cost points.
+- **A true research finding is not automatically a scored rule.** P1 rests on the U-shaped attention curve, where both the start and the end get high attention. The tempting inference is "so restate the bans at the end," scoring files down for skipping it.
+
+  That inference was rejected. A SOUL loaded once per session gains little from a mechanical end-echo, and requiring one manufactures the body-smear P2 exists to catch. Cite recency as real, front-load the hard rules, leave the closing echo optional. Before turning any attention finding into a checklist item, ask whether it earns a requirement or only a permission.
 - **Project detail in SOUL is an M1 fail even when well-written.** "Use pytest not unittest" is a great instruction in the wrong file. The fix is to move it to AGENTS.md, not delete it.
-- **A file can pass every M/V/P item and still be unreadable or confusing.** Correct scope, safe truncation, clean scan, distinctive voice, no redundancy, all enforceable, and still a wall of nested parens and shouted caps twice as long as the job needs, or a section that only parses if you already know an unstated fact. That's what R1 catches. If a section isn't easy to understand, it's a bad section, however correct the rule is: the model can't follow what it has to guess at. Shorter and clearer is better by default. Fix a failing R1 with the Simplify pass (add the missing context for a comprehension miss; cut for a density miss), not by dropping constraints.
-- **Editing this skill's own rubric files: preserve invariants and trust re-reads over warnings.** When you patch checklist.md or SKILL.md, the same discipline the Simplify pass demands applies to your own edits. After a rescale (e.g. /8 to /9) grep for stray old values, and confirm the item-anchor count, the arXiv IDs, and the Pass/Fail line counts are unchanged. If a patch returns a "modified by sibling subagent" warning, don't trust it blindly and don't overwrite blindly: re-read the file, confirm only your own edit landed, then continue. In this session those warnings were false alarms, but re-reading is the only way to know.
+- **A file can pass every M/V/P item and still be unreadable.** Correct scope, safe truncation, clean scan, distinctive voice, no redundancy, all enforceable, and still a wall of nested parens and shouted caps twice as long as the job needs. R1 catches that.
+
+  A section that's hard to understand is a bad section however correct its rule, because the model can't follow what it has to guess at. Fix a failing R1 with the Simplify pass: add the missing context for a comprehension miss, cut for a density miss. Never by dropping constraints.
+- **Editing this skill's own rubric files needs the same discipline.** When you patch checklist.md or SKILL.md, preserve invariants exactly as the Simplify pass demands. After a rescale (/8 to /9), grep for stray old values and confirm the item-anchor count, arXiv IDs, and Pass/Fail line counts are unchanged.
+
+  If a patch returns a "modified by sibling subagent" warning, re-read the file and confirm only your own edit landed before continuing. Those warnings have been false alarms, but re-reading is the only way to know.
 
 ## Skill source
 
-Built 2026-07 from: Hermes docs (`/docs/user-guide/features/context-files`, `/docs/guides/use-soul-with-hermes`, `/docs/user-guide/features/personality`) for the loading mechanics, and prompt-attention research for the P1-P3 attention basis (papers restated compactly in `references/attention-basis.md`). R1 (readability and length) was added later from the same attention research: shorter, cleaner prompts derail less. `references/template.md` is the target "what good looks like" shape, adapted from a community "Anatomy of a SOUL.md" infographic and corrected against the mechanics (Boundaries moved to top + end, Defaults block added per the docs' Identity/Style/Avoid/Defaults structure, Memory reframed as privacy *policy* not mechanism). To refresh: re-read those three doc pages for any change to truncation ratios, the HERMES_HOME-only rule, or the injection scanner, and re-check the arXiv findings.
+Built 2026-07. Loading mechanics come from three Hermes doc pages:
+`/docs/user-guide/features/context-files`, `/docs/guides/use-soul-with-hermes`, and
+`/docs/user-guide/features/personality`.
+
+P1-P3 come from skill-audit's `references/prompt-attention-research.md`, restated compactly in
+`references/attention-basis.md`. R1 was added later from the same research, since shorter and
+cleaner prompts derail less.
+
+`references/template.md` is the target shape, adapted from a community "Anatomy of a SOUL.md"
+infographic and corrected against the mechanics: Boundaries moved to top and end, a Defaults
+block added per the docs' Identity/Style/Avoid/Defaults structure, and Memory reframed as
+privacy policy rather than mechanism.
+
+To refresh, re-read those three doc pages for changes to truncation ratios, the
+HERMES_HOME-only rule, or the injection scanner, then re-check the arXiv findings.

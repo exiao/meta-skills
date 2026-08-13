@@ -2,8 +2,8 @@
 
 The P1-P3 checklist items aren't style preferences; each is a finding about how models
 attend to and follow instructions in a long prompt. Cite the relevant paper when flagging a
-P item so the author sees *why* it matters. This is the compact version for SOUL.md work;
-the papers are cited in full below.
+P item so the author sees *why* it matters. Fuller notes live in skill-audit's
+`references/prompt-attention-research.md`; this is the compact version for SOUL.md work.
 
 ## Positional attention (P1)
 

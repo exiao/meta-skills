@@ -9,6 +9,7 @@ import argparse
 import json
 import os
 import select
+import shutil
 import subprocess
 import sys
 import time
@@ -42,30 +43,38 @@ def run_single_query(
 ) -> bool:
     """Run a single query and return whether the skill was triggered.
 
-    Creates a command file in .claude/commands/ so it appears in Claude's
-    available_skills list, then runs `claude -p` with the raw query.
-    Uses --include-partial-messages to detect triggering early from
-    stream events (content_block_start) rather than waiting for the
-    full assistant message, which only arrives after tool execution.
+    Registers the skill in .claude/skills/<name>/SKILL.md so it appears in
+    Claude's auto-invokable `skills` list (the `skills[]` array in the init
+    event), then runs `claude -p` with the raw query. Uses
+    --include-partial-messages to detect triggering early from stream events
+    (content_block_start) rather than waiting for the full assistant message,
+    which only arrives after tool execution.
+
+    NOTE: the probe must be a real skill, not a slash command. A file in
+    .claude/commands/ registers as a slash command (only fires when a user
+    types /name) and never enters the model's auto-invokable skills list, so
+    the model can never reach it via the Skill tool and every query reads as
+    not-triggered. Auto-invokable skills live in .claude/skills/<name>/SKILL.md.
     """
     unique_id = uuid.uuid4().hex[:8]
     clean_name = f"{skill_name}-skill-{unique_id}"
-    project_commands_dir = Path(project_root) / ".claude" / "commands"
-    command_file = project_commands_dir / f"{clean_name}.md"
+    project_skills_dir = Path(project_root) / ".claude" / "skills" / clean_name
+    skill_file = project_skills_dir / "SKILL.md"
 
     try:
-        project_commands_dir.mkdir(parents=True, exist_ok=True)
-        # Use YAML block scalar to avoid breaking on quotes in description
+        project_skills_dir.mkdir(parents=True, exist_ok=True)
+        # Use a YAML block scalar for the description to survive quotes/newlines.
         indented_desc = "\n  ".join(skill_description.split("\n"))
-        command_content = (
+        skill_content = (
             f"---\n"
+            f"name: {clean_name}\n"
             f"description: |\n"
             f"  {indented_desc}\n"
             f"---\n\n"
             f"# {skill_name}\n\n"
             f"This skill handles: {skill_description}\n"
         )
-        command_file.write_text(command_content)
+        skill_file.write_text(skill_content)
 
         cmd = [
             "claude",
@@ -177,8 +186,9 @@ def run_single_query(
 
         return triggered
     finally:
-        if command_file.exists():
-            command_file.unlink()
+        # Remove the temporary skill directory we registered for this probe.
+        if project_skills_dir.exists():
+            shutil.rmtree(project_skills_dir, ignore_errors=True)
 
 
 def run_eval(
@@ -262,7 +272,7 @@ def main():
     parser.add_argument("--skill-path", required=True, help="Path to skill directory")
     parser.add_argument("--description", default=None, help="Override description to test")
     parser.add_argument("--num-workers", type=int, default=10, help="Number of parallel workers")
-    parser.add_argument("--timeout", type=int, default=30, help="Timeout per query in seconds")
+    parser.add_argument("--timeout", type=int, default=60, help="Timeout per query in seconds. The model needs ~15-30s to make its first tool decision; below ~45s, runs get killed before the Skill call streams and read as false negatives.")
     parser.add_argument("--runs-per-query", type=int, default=3, help="Number of runs per query")
     parser.add_argument("--trigger-threshold", type=float, default=0.5, help="Trigger rate threshold")
     parser.add_argument("--model", default=None, help="Model to use for claude -p (default: user's configured model)")
