@@ -50,7 +50,18 @@ more trustworthy than a plain goal-mode card looping on a number.
    early the moment the evidence is decisive, without inflating the false-commit
    rate. **COMMIT when wealth ≥ 1/alpha** (alpha≈0.05 → threshold 20). Stop
    measuring as soon as it crosses (the ~18% eval-cost saving).
-5. **Reject** when the e-process never crosses over the full held-out set: the gain
+5. **Alpha spending across candidates (multi-candidate control).** Ville bounds ONE
+   e-process. Every `pace_accept` call starts a fresh wealth process, so a
+   hill-climber testing K candidates at a flat alpha has a run-level false-commit
+   probability up to `K·alpha` — the adaptive multiple testing PACE exists to close.
+   Create **one `AlphaLedger` per run** and pass it to every call: the k-th tested
+   candidate draws `alpha_k = alpha_total·6/(π²k²)`, whose infinite sum is exactly
+   `alpha_total`, so a union bound puts the **family-wise** false-commit probability
+   for the whole run at ≤ `alpha_total` no matter how many candidates are tried (the
+   budget shrinks, never runs out). Deterministic fast-path and underpowered
+   `continue` decisions spend nothing. Without a ledger the guarantee is
+   per-candidate only — log `decision.alpha_used` so each accept says what it spent.
+6. **Reject** when the e-process never crosses over the full held-out set: the gain
    could not be certified at level alpha → discard, log the reject. Note this is
    **not** the same as "mean ≤ 0": a true-but-small positive gain that fails to
    accumulate decisive wealth is also rejected — the gate discards gains it cannot
@@ -91,14 +102,18 @@ guarantee, measured rather than merely asserted).
 ## How the loop calls it
 
 ```python
-from scripts.pace_accept import pace_accept, should_use_pace
+from scripts.pace_accept import pace_accept, should_use_pace, AlphaLedger
+
+# ONE ledger per hill-climber run -> family-wise control across candidates.
+ledger = AlphaLedger(alpha_total=0.05)
 
 # candidate_scores / incumbent_scores: per-instance rewards on the SAME val
 # instances, same order (the paired contract).
 dec = pace_accept(candidate_scores, incumbent_scores,
-                  alpha=0.05, reward_kind="score",
+                  reward_kind="score",
                   reward_range=R,   # a-priori reward span (max-min) -> strict guarantee
-                  min_instances=8)
+                  min_instances=8,
+                  ledger=ledger)    # omit for single-candidate use (alpha=0.05 flat)
 
 if dec.verdict == "commit":
     ...   # accept the mutation into the pool; the incumbent becomes the candidate

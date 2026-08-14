@@ -13,8 +13,18 @@ e-process on the paired per-instance reward differences d_i = score_candidate(i)
 score_incumbent(i). Under H0 ("candidate is no better", E[d_i | past] <= 0) the
 wealth process is a non-negative supermartingale, so by Ville's inequality
 P(ever cross 1/alpha) <= alpha EVEN UNDER OPTIONAL STOPPING. COMMIT when wealth
->= 1/alpha. This controls each candidate's false-commit probability at alpha
-regardless of how many instances we peek at or how many candidates we try.
+>= 1/alpha. This controls ONE candidate's false-commit probability at alpha
+regardless of how many instances we peek at.
+
+Multiple candidates need alpha SPENDING (this is not free). Each pace_accept call
+starts a fresh wealth process, so Ville bounds each candidate separately: a
+hill-climber that tries K candidates against the same validation set at a flat
+alpha has a run-level false-commit probability up to K*alpha, which is the
+adaptive p-hacking PACE exists to close. Pass a run-level AlphaLedger (one per
+hill-climber run) and the gate draws a shrinking alpha_k per candidate whose
+infinite sum is <= the run's total alpha, so the family-wise false-commit
+probability over the WHOLE run is bounded by that total no matter how many
+candidates are tried. Without a ledger the guarantee is per-candidate only.
 
 Predictable normalizer (why the anytime-valid claim holds): the supermartingale
 property requires each bet factor be PREDICTABLE — a function of data strictly
@@ -36,6 +46,7 @@ greedy exact-improvement decision instead.
 No third-party deps (pure stdlib) so the lane can run it anywhere.
 """
 from __future__ import annotations
+import math
 from dataclasses import dataclass, field
 from typing import Sequence, Literal
 
@@ -50,7 +61,41 @@ class PaceDecision:
     mean_diff: float              # mean paired reward difference (diagnostic)
     reason: str
     pace_active: bool = True      # False => deterministic fast-path was used
+    alpha_used: float = 0.0       # alpha actually spent on this candidate
     trace: list[float] = field(default_factory=list)  # wealth after each instance
+
+
+@dataclass
+class AlphaLedger:
+    """Run-level alpha budget spent across candidates (multi-candidate control).
+
+    Ville bounds ONE e-process at its own alpha. A hill-climber testing K
+    candidates against the same validation set at a flat alpha therefore has a
+    run-level false-commit probability up to K*alpha -- exactly the adaptive
+    multiple testing PACE is supposed to close.
+
+    Create ONE ledger per hill-climber run and pass it to every pace_accept call
+    in that run. The k-th candidate draws alpha_k = alpha_total * 6/(pi^2 k^2);
+    sum_{k>=1} alpha_k = alpha_total exactly, so by a union bound over candidates
+    the FAMILY-WISE false-commit probability for the whole run is <= alpha_total
+    no matter how many candidates are tried (the budget shrinks, it never runs
+    out). Only candidates that actually run the sequential test draw from it --
+    deterministic fast-path and underpowered "continue" decisions spend nothing.
+    """
+    alpha_total: float = 0.05
+    spent: float = 0.0
+    n_drawn: int = 0
+
+    def __post_init__(self) -> None:
+        if not (0 < self.alpha_total < 1):
+            raise ValueError("alpha_total must be in the interval (0, 1)")
+
+    def draw(self) -> float:
+        """Spend the next candidate's slice of the run-level budget."""
+        self.n_drawn += 1
+        alpha_k = self.alpha_total * 6.0 / (math.pi ** 2 * self.n_drawn ** 2)
+        self.spent += alpha_k
+        return alpha_k
 
 
 def should_use_pace(reward_kind: str, variance_observed: bool | None = None) -> bool:
@@ -103,6 +148,7 @@ def pace_accept(
     reward_kind: str = "score",
     lam: float = 0.5,
     min_instances: int = 8,
+    ledger: AlphaLedger | None = None,
 ) -> PaceDecision:
     """Decide whether to COMMIT the candidate over the incumbent.
 
@@ -116,13 +162,21 @@ def pace_accept(
         the full set -- that peeks at future data and voids Ville's guarantee. If an
         observed |d_i| exceeds this bound the call RAISES (the declared range was
         wrong) rather than silently clipping into a nonlinear regime.
-    alpha: target false-commit probability (commit when wealth >= 1/alpha).
+    alpha: target false-commit probability for THIS candidate (commit when wealth
+        >= 1/alpha). Ignored when a `ledger` is supplied.
     reward_kind: routes the deterministic fast-path (see should_use_pace).
     lam: betting fraction in [0,1). 0.5 is a robust default.
     min_instances: do not COMMIT before this many paired instances even if wealth
         crosses early -- guards a powered split (plan open-Q 4). Below this many
         AVAILABLE instances, the gate returns "continue" with a reason so the lane
         BLOCKS for a bigger eval set rather than committing on too-few samples.
+    ledger: run-level AlphaLedger for MULTI-CANDIDATE control. Without it, alpha
+        bounds this candidate only and a K-candidate hill-climber's run-level
+        false-commit probability grows to ~K*alpha. With one ledger shared across
+        the run, each tested candidate draws a shrinking alpha_k summing to
+        alpha_total, so the whole run is bounded at alpha_total. Only candidates
+        that actually run the sequential test draw (fast-path/underpowered spend
+        nothing). The drawn value is reported as PaceDecision.alpha_used.
 
     Returns a PaceDecision:
       "commit"   = the e-process crossed 1/alpha: decisive, statistically-real gain.
@@ -188,6 +242,12 @@ def pace_accept(
         )
 
     # --- Predictable (fixed a-priori) normalizer -> strict test supermartingale.
+    # Multi-candidate control: this candidate is about to run a real sequential
+    # test, so it draws its slice of the run-level budget now (fast-path and
+    # underpowered returns above spend nothing).
+    if ledger is not None:
+        alpha = ledger.draw()
+        threshold = 1.0 / alpha
     wealth_trace = _wealth_process(diffs, scale=reward_range, lam=lam)
 
     # Anytime-valid optional stopping: commit the first time wealth crosses 1/alpha,
@@ -198,6 +258,7 @@ def pace_accept(
                 verdict="commit", wealth=w, threshold=threshold,
                 n_used=idx, n_total=n, mean_diff=mean_diff,
                 reason=f"e-process wealth {w:.2f} >= 1/alpha {threshold:.2f} at instance {idx} (decisive gain)",
+                alpha_used=alpha,
                 trace=wealth_trace[:idx],
             )
 
@@ -207,6 +268,7 @@ def pace_accept(
         n_used=n, n_total=n, mean_diff=mean_diff,
         reason=(f"e-process wealth {final_w:.2f} never crossed 1/alpha {threshold:.2f} "
                 f"over {n} instances (mean diff {mean_diff:+.4f}); gain not distinguishable from noise"),
+        alpha_used=alpha,
         trace=wealth_trace,
     )
 

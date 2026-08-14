@@ -307,10 +307,31 @@ def mine_sessions_jsonl(skill_name: str, terms: list[str], phrases: list[str], m
             if row.get("role") != "user":
                 continue
             raw = flatten_content(row.get("content"))
+            # Same invocation parsing as mine_state_db: a Hermes skill-invocation
+            # turn carries the injected skill BODY, so keyword-matching it would
+            # write that body (truncated) as task_input instead of the real ask.
+            # Extract the instruction after the marker, and drop other skills'
+            # invocations outright.
+            # JSONL user turns may carry a "[Sender] " tag ahead of the system
+            # marker that SKILL_INVOKE_RE is anchored on. Drop it only when doing
+            # so exposes an invocation, so BOILERPLATE still sees other bracketed
+            # lead-ins ("[Alice] [System note: ...]") with one prefix left to match.
+            unsent = clean_user(raw)
+            if SKILL_INVOKE_RE.match(unsent):
+                raw = unsent
+            parsed = strip_skill_prefix(raw)
+            confidence_override = None
+            if parsed is not None:
+                skill, instr = parsed
+                # Invocation names may carry a category path (e.g. "memory/memory-gc").
+                if skill.split("/")[-1] != skill_name or not instr:
+                    continue  # different skill's body, or no real user instruction
+                raw = instr
+                confidence_override = ("high", f"explicit skill invocation of '{skill_name}'")
             user = clean_user(raw)
             if len(user) < MIN_LEN or has_secret(user) or BOILERPLATE.match(user):
                 continue
-            why = match_reason(user, skill_name, terms, phrases)
+            why = confidence_override or match_reason(user, skill_name, terms, phrases)
             if not why:
                 continue
             confidence, reason = why

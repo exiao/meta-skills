@@ -22,7 +22,7 @@ fail-before/pass-after ground-truth test, not a flaky sampled one.
 """
 import sys, pathlib, random
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from pace_accept import pace_accept, should_use_pace, _wealth_process
+from pace_accept import pace_accept, should_use_pace, _wealth_process, AlphaLedger
 
 FAILS = []
 
@@ -195,6 +195,55 @@ try:
     check("on-boundary FP diff is tolerated (not spuriously rejected)", True)
 except ValueError as exc:
     check("on-boundary FP diff is tolerated (not spuriously rejected)", False, str(exc))
+
+
+# ── Fixture 10b: alpha spending bounds the MULTI-CANDIDATE false-commit rate ──
+# The per-candidate guarantee is not the run-level one. Every pace_accept call
+# starts a FRESH wealth process at a FIXED bar (1/alpha), so a hill-climber gets an
+# unlimited number of independent shots at that same bar and its run-level
+# false-commit probability grows with the candidate count. A ledger makes each
+# successive candidate pay: the bar rises as the budget is spent.
+# Deterministic proof on borderline evidence -- final wealth ~49.6, above the flat
+# bar (20) and above candidate 1's ledgered bar (32.9), below candidate 2's (131.6).
+borderline_inc = [0.4] * 80
+borderline_cand = [0.5] * 80          # constant d_i = +0.1
+K = 5
+flat_commits = sum(
+    pace_accept(borderline_cand, borderline_inc, alpha=ALPHA,
+                reward_kind="score", reward_range=1.0).verdict == "commit"
+    for _ in range(K)
+)
+run_ledger = AlphaLedger(alpha_total=ALPHA)
+ledger_verdicts = [
+    pace_accept(borderline_cand, borderline_inc, reward_kind="score",
+                reward_range=1.0, ledger=run_ledger)
+    for _ in range(K)
+]
+ledger_commits = sum(d.verdict == "commit" for d in ledger_verdicts)
+check("multi-candidate: flat alpha re-offers the SAME bar to every candidate",
+      flat_commits == K, f"{flat_commits}/{K} candidates committed at a fixed 1/alpha")
+check("multi-candidate: AlphaLedger tightens the bar as budget is spent",
+      ledger_commits < flat_commits,
+      f"ledger committed {ledger_commits}/{K}; thresholds "
+      + ", ".join(f"{d.threshold:.1f}" for d in ledger_verdicts[:3]) + " ...")
+check("multi-candidate: run-level spend stays within alpha_total",
+      run_ledger.spent <= ALPHA + 1e-12 and sum(d.alpha_used for d in ledger_verdicts) == run_ledger.spent,
+      f"spent={run_ledger.spent:.6f} of {ALPHA} over {run_ledger.n_drawn} tested candidates")
+
+# The budget shrinks but never runs out, and its total never exceeds alpha_total.
+led = AlphaLedger(alpha_total=ALPHA)
+draws = [led.draw() for _ in range(500)]
+check("AlphaLedger: draws strictly shrink and stay positive",
+      all(0 < b < a for a, b in zip(draws, draws[1:])), f"first={draws[0]:.5f} last={draws[-1]:.3g}")
+check("AlphaLedger: total spend never exceeds alpha_total",
+      led.spent <= ALPHA + 1e-12, f"spent={led.spent:.6f} of {ALPHA}")
+
+# Non-testing verdicts spend nothing: the budget is for candidates actually tested.
+led2 = AlphaLedger(alpha_total=ALPHA)
+pace_accept([1, 1, 1], [0, 0, 0], reward_kind="score", reward_range=1.0, ledger=led2)  # underpowered
+pace_accept([1] * 10, [0] * 10, reward_kind="exit_code", reward_range=1.0, ledger=led2)  # fast-path
+check("AlphaLedger: underpowered/deterministic decisions spend no budget",
+      led2.spent == 0.0 and led2.n_drawn == 0, f"spent={led2.spent} n_drawn={led2.n_drawn}")
 
 
 print()

@@ -15,6 +15,7 @@ import sys
 import time
 import uuid
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from contextlib import contextmanager
 from pathlib import Path
 
 from scripts.utils import parse_skill_md
@@ -33,22 +34,16 @@ def find_project_root() -> Path:
     return current
 
 
-def run_single_query(
-    query: str,
-    skill_name: str,
-    skill_description: str,
-    timeout: int,
-    project_root: str,
-    model: str | None = None,
-) -> bool:
-    """Run a single query and return whether the skill was triggered.
+@contextmanager
+def registered_probe(project_root: Path, skill_name: str, skill_description: str):
+    """Register ONE probe skill for the whole eval run and yield its name.
 
-    Registers the skill in .claude/skills/<name>/SKILL.md so it appears in
-    Claude's auto-invokable `skills` list (the `skills[]` array in the init
-    event), then runs `claude -p` with the raw query. Uses
-    --include-partial-messages to detect triggering early from stream events
-    (content_block_start) rather than waiting for the full assistant message,
-    which only arrives after tool execution.
+    Registration is shared, not per-worker: with `--num-workers > 1`, a probe per
+    worker puts several indistinguishable skills (same description) in the same
+    project's .claude/skills, so a worker's `claude -p` can invoke a sibling's
+    probe name and be scored as not-triggered. One probe, written before the pool
+    starts and removed after it drains, makes every worker's invocation
+    unambiguous.
 
     NOTE: the probe must be a real skill, not a slash command. A file in
     .claude/commands/ registers as a slash command (only fires when a user
@@ -56,139 +51,151 @@ def run_single_query(
     the model can never reach it via the Skill tool and every query reads as
     not-triggered. Auto-invokable skills live in .claude/skills/<name>/SKILL.md.
     """
-    unique_id = uuid.uuid4().hex[:8]
-    clean_name = f"{skill_name}-skill-{unique_id}"
-    project_skills_dir = Path(project_root) / ".claude" / "skills" / clean_name
-    skill_file = project_skills_dir / "SKILL.md"
-
+    probe_name = f"{skill_name}-skill-{uuid.uuid4().hex[:8]}"
+    probe_dir = Path(project_root) / ".claude" / "skills" / probe_name
     try:
-        project_skills_dir.mkdir(parents=True, exist_ok=True)
+        probe_dir.mkdir(parents=True, exist_ok=True)
         # Use a YAML block scalar for the description to survive quotes/newlines.
         indented_desc = "\n  ".join(skill_description.split("\n"))
-        skill_content = (
+        (probe_dir / "SKILL.md").write_text(
             f"---\n"
-            f"name: {clean_name}\n"
+            f"name: {probe_name}\n"
             f"description: |\n"
             f"  {indented_desc}\n"
             f"---\n\n"
             f"# {skill_name}\n\n"
             f"This skill handles: {skill_description}\n"
         )
-        skill_file.write_text(skill_content)
+        yield probe_name
+    finally:
+        shutil.rmtree(probe_dir, ignore_errors=True)
 
-        cmd = [
-            "claude",
-            "-p", query,
-            "--output-format", "stream-json",
-            "--verbose",
-            "--include-partial-messages",
-        ]
-        if model:
-            cmd.extend(["--model", model])
 
-        # Remove CLAUDECODE env var to allow nesting claude -p inside a
-        # Claude Code session. The guard is for interactive terminal conflicts;
-        # programmatic subprocess usage is safe.
-        env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+def run_single_query(
+    query: str,
+    clean_name: str,
+    timeout: int,
+    project_root: str,
+    model: str | None = None,
+) -> bool:
+    """Run a single query and return whether the probe skill was triggered.
 
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            cwd=project_root,
-            env=env,
-        )
+    `clean_name` is the shared probe registered by `registered_probe`; this
+    function only runs `claude -p` with the raw query and never creates or
+    deletes skill files (concurrent workers share one probe). Uses
+    --include-partial-messages to detect triggering early from stream events
+    (content_block_start) rather than waiting for the full assistant message,
+    which only arrives after tool execution.
+    """
+    cmd = [
+        "claude",
+        "-p", query,
+        "--output-format", "stream-json",
+        "--verbose",
+        "--include-partial-messages",
+    ]
+    if model:
+        cmd.extend(["--model", model])
 
-        triggered = False
-        start_time = time.time()
-        buffer = ""
-        # Track state for stream event detection
-        pending_tool_name = None
-        accumulated_json = ""
+    # Remove CLAUDECODE env var to allow nesting claude -p inside a
+    # Claude Code session. The guard is for interactive terminal conflicts;
+    # programmatic subprocess usage is safe.
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
 
-        try:
-            while time.time() - start_time < timeout:
-                if process.poll() is not None:
-                    remaining = process.stdout.read()
-                    if remaining:
-                        buffer += remaining.decode("utf-8", errors="replace")
-                    break
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        cwd=project_root,
+        env=env,
+    )
 
-                ready, _, _ = select.select([process.stdout], [], [], 1.0)
-                if not ready:
+    triggered = False
+    start_time = time.time()
+    buffer = ""
+    # Track state for stream event detection
+    pending_tool_name = None
+    accumulated_json = ""
+
+    try:
+        while time.time() - start_time < timeout:
+            if process.poll() is not None:
+                remaining = process.stdout.read()
+                if remaining:
+                    buffer += remaining.decode("utf-8", errors="replace")
+                break
+
+            ready, _, _ = select.select([process.stdout], [], [], 1.0)
+            if not ready:
+                continue
+
+            chunk = os.read(process.stdout.fileno(), 8192)
+            if not chunk:
+                break
+            buffer += chunk.decode("utf-8", errors="replace")
+
+            while "\n" in buffer:
+                line, buffer = buffer.split("\n", 1)
+                line = line.strip()
+                if not line:
                     continue
 
-                chunk = os.read(process.stdout.fileno(), 8192)
-                if not chunk:
-                    break
-                buffer += chunk.decode("utf-8", errors="replace")
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
 
-                while "\n" in buffer:
-                    line, buffer = buffer.split("\n", 1)
-                    line = line.strip()
-                    if not line:
-                        continue
+                # Early detection via stream events
+                if event.get("type") == "stream_event":
+                    se = event.get("event", {})
+                    se_type = se.get("type", "")
 
-                    try:
-                        event = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-
-                    # Early detection via stream events
-                    if event.get("type") == "stream_event":
-                        se = event.get("event", {})
-                        se_type = se.get("type", "")
-
-                        if se_type == "content_block_start":
-                            cb = se.get("content_block", {})
-                            if cb.get("type") == "tool_use":
-                                tool_name = cb.get("name", "")
-                                if tool_name in ("Skill", "Read"):
-                                    pending_tool_name = tool_name
-                                    accumulated_json = ""
-                                else:
-                                    return False
-
-                        elif se_type == "content_block_delta" and pending_tool_name:
-                            delta = se.get("delta", {})
-                            if delta.get("type") == "input_json_delta":
-                                accumulated_json += delta.get("partial_json", "")
-                                if clean_name in accumulated_json:
-                                    return True
-
-                        elif se_type in ("content_block_stop", "message_stop"):
-                            if pending_tool_name:
-                                return clean_name in accumulated_json
-                            if se_type == "message_stop":
+                    if se_type == "content_block_start":
+                        cb = se.get("content_block", {})
+                        if cb.get("type") == "tool_use":
+                            tool_name = cb.get("name", "")
+                            if tool_name in ("Skill", "Read"):
+                                pending_tool_name = tool_name
+                                accumulated_json = ""
+                            else:
                                 return False
 
-                    # Fallback: full assistant message
-                    elif event.get("type") == "assistant":
-                        message = event.get("message", {})
-                        for content_item in message.get("content", []):
-                            if content_item.get("type") != "tool_use":
-                                continue
-                            tool_name = content_item.get("name", "")
-                            tool_input = content_item.get("input", {})
-                            if tool_name == "Skill" and clean_name in tool_input.get("skill", ""):
-                                triggered = True
-                            elif tool_name == "Read" and clean_name in tool_input.get("file_path", ""):
-                                triggered = True
-                            return triggered
+                    elif se_type == "content_block_delta" and pending_tool_name:
+                        delta = se.get("delta", {})
+                        if delta.get("type") == "input_json_delta":
+                            accumulated_json += delta.get("partial_json", "")
+                            if clean_name in accumulated_json:
+                                return True
 
-                    elif event.get("type") == "result":
+                    elif se_type in ("content_block_stop", "message_stop"):
+                        if pending_tool_name:
+                            return clean_name in accumulated_json
+                        if se_type == "message_stop":
+                            return False
+
+                # Fallback: full assistant message
+                elif event.get("type") == "assistant":
+                    message = event.get("message", {})
+                    for content_item in message.get("content", []):
+                        if content_item.get("type") != "tool_use":
+                            continue
+                        tool_name = content_item.get("name", "")
+                        tool_input = content_item.get("input", {})
+                        if tool_name == "Skill" and clean_name in tool_input.get("skill", ""):
+                            triggered = True
+                        elif tool_name == "Read" and clean_name in tool_input.get("file_path", ""):
+                            triggered = True
                         return triggered
-        finally:
-            # Clean up process on any exit path (return, exception, timeout)
-            if process.poll() is None:
-                process.kill()
-                process.wait()
 
-        return triggered
+                elif event.get("type") == "result":
+                    return triggered
     finally:
-        # Remove the temporary skill directory we registered for this probe.
-        if project_skills_dir.exists():
-            shutil.rmtree(project_skills_dir, ignore_errors=True)
+        # Clean up process on any exit path (return, exception, timeout)
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+
+    return triggered
 
 
 def run_eval(
@@ -202,18 +209,23 @@ def run_eval(
     trigger_threshold: float = 0.5,
     model: str | None = None,
 ) -> dict:
-    """Run the full eval set and return results."""
+    """Run the full eval set and return results.
+
+    One probe skill is registered for the whole run (see `registered_probe`) so
+    parallel workers cannot see, and invoke, each other's identically-described
+    probes.
+    """
     results = []
 
-    with ProcessPoolExecutor(max_workers=num_workers) as executor:
+    with registered_probe(project_root, skill_name, description) as clean_name, \
+            ProcessPoolExecutor(max_workers=num_workers) as executor:
         future_to_info = {}
         for item in eval_set:
             for run_idx in range(runs_per_query):
                 future = executor.submit(
                     run_single_query,
                     item["query"],
-                    skill_name,
-                    description,
+                    clean_name,
                     timeout,
                     str(project_root),
                     model,
