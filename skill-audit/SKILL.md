@@ -10,14 +10,14 @@ Score a skill's structure and design. Not its output quality (that's skill-impro
 building one (that's skill-creator).
 
 Read [references/checklist.md](references/checklist.md) first. It defines every item and which
-ones apply. Then read the Traps section below before flagging any M1, C4, or broken-link
+ones apply. Then read the Traps section below before flagging any M1, C4, DP1, or broken-link
 finding. Those calls look obvious in a grep and are backwards in practice.
 
 ## Process
 
 1. Read the whole skill directory, every file.
-2. Score the checklist: S1-S4, C1-C6, D1-D2, B1-B2, E1, P1-P3, M1-M4. One point each, as a
-   fraction of the items that apply.
+2. Score the checklist: S1-S4, C1-C6, D1-D2, B1-B2, E1, P1-P3, DP1-DP4, M1-M4. One point each, as
+   a fraction of the items that apply.
 3. Write the scorecard. Rank fixes by impact.
 4. Ask before changing anything.
 
@@ -25,6 +25,12 @@ Three items need a command, not a read:
 
 - **E1**: dry-run the entrypoint (`python -m scripts.<x> --help`) before scoring it.
 - **C5**: `grep -nE "NEVER|DO NOT|don't" SKILL.md references/*.md` for bans with no reason.
+- **DP1-DP4**: run these over the body, then read every hit in context.
+  `grep -nE "CRITICAL|IMPORTANT|MUST|ALWAYS|NEVER" SKILL.md` (density, not instances),
+  `grep -niE "step by step|<scratchpad>|<thinking>|plan before acting" SKILL.md`,
+  `grep -niE "hold (all )?(findings|results)|don't narrate|no interim|never use (bullets|headers|bold)" SKILL.md`,
+  `grep -nE "at most [0-9]+|under [0-9]+ words|every [0-9]+ (tool calls|messages)|STEP [0-9]" SKILL.md`,
+  `grep -niE "claude-2|claude-3|claude-instant|3\\.5|3\\.7|gpt-4" SKILL.md`.
 - **Reference health**: `python3 ~/.hermes/skills/skills-meta/skill-audit/scripts/check_reference_health.py <skill-dir>`.
   Add `--orphans` for the whole tree. Exits 1 on a dangling pointer, so it can gate a commit.
 
@@ -33,7 +39,14 @@ For codebase drift, prompt-budget weight, usage, upstream forks, and gap audits,
 
 ## Traps
 
-Five judgment calls that come from audits that got them wrong.
+Six judgment calls that come from audits that got them wrong.
+
+**Never trim a description under DP1.** DP1 fails ambient emphasis, and a `description` full of
+trigger phrases and urgency looks exactly like the thing it fails. It is the opposite: routing
+text may carry calibrated urgency, because skills currently under-trigger, and the description is
+the one line that decides whether the skill loads at all. Behavioral text explains, trigger text
+may push. The same protection covers a "Use when:" block or a trigger list. Classify by function
+before flagging, because these are identical to a grep.
 
 **Never strip a reality check while hunting M1.** This is the most damaging mistake here.
 "Re-read your own answer" and "run the app and watch it work" look alike in a grep and are
