@@ -154,6 +154,120 @@ This dimension exists because the rest of the checklist scores structure and nev
 
 Score P as one point per item (3 total) for applicable skills. Don't double-penalize: a redundant *explanation* already flagged under C4 doesn't also cost P2, and a vague untestable term already flagged under C5 doesn't also cost P3. P targets the positional / diluted-instruction / unenforceable shapes specifically.
 
+## Dated Prompting (up to 5 points, conditional: expect 2-4 to apply)
+
+Was this skill written for a model that no longer exists? M items ask whether guidance matches
+the current model's *strengths*. DP items ask whether it still carries workarounds for a previous
+model's *weaknesses*. Every pattern, the keep list, and the confidence rubric are in
+[references/dated-prompting.md](dated-prompting.md), adapted from the `/claude-api prompt-audit`
+skill bundled with Claude Code.
+
+**Two questions decide most DP findings, so ask them before opening the item list.** First: could
+the model already know this? Keep what only the author knows (audience, environment facts, quality
+bar, tool contracts, the reasons behind constraints) and treat restatements of trained defaults as
+removal candidates. Second: which failure, on which model, did this line prevent, and does that
+failure still reproduce? `git blame` answers it where history exists. Both are expanded in the
+reference.
+
+**Score each DP item High, Medium, or Low confidence, and quote the line.** High means documented
+in current model docs or it errors on the target model. Medium means widely observed behavior.
+Low means idiom-dating alone: flag it, propose no edit, and do not count it against the score.
+
+**The frame is fit, not length.** Never justify a DP cut by character count. An audit that finds
+nothing should change nothing.
+
+### DP1: Emphasis is scoped, not ambient
+Current models are highly responsive to the system prompt, so boosters written for older models
+now over-apply, causing over-triggering and rigid behavior in gray areas. Leftover hedges fail the
+other direction: `try to`, `if possible`, and `ideally` attached to real requirements are now read
+literally as permission to under-deliver.
+
+- **Fail:** `CRITICAL` / `MUST` / `NEVER` / `ALWAYS` in caps recurring throughout the body;
+  emphasis in section headings; several instructions each marked critical, which drains the
+  markers of information; trait claims (`you tend to over-explain`, `don't be too verbose`);
+  hedges on actual requirements.
+- **Critical exception, do NOT flag: routing text may shout.** The frontmatter `description`, a
+  trigger block, a "Use when:" list. Skills currently under-trigger, so calibrated urgency there
+  is load-bearing. Behavioral text explains; trigger text may push. These look identical to a
+  grep, so classify by function first.
+- **Pass:** emphasis appears where one instruction was demonstrably underweighted, with its
+  reason, and reads at normal volume elsewhere.
+- Don't double-penalize: a bare absolute with no stated reason already fails C5. DP1 targets
+  density and volume of emphasis even where each instance has a reason.
+
+### DP2: No scaffolds the model or API replaced
+- **Fail:** "think step by step", `<scratchpad>` / `<thinking>` tag instructions, "plan before
+  acting", "use the think tool to plan", required reasoning sections in the output. Current models
+  plan and think unprompted; these cause over-planning. For skills shipping API-calling scripts:
+  assistant-turn prefill and its JSON-forcing stack (stop sequences, regex extraction,
+  retry-on-parse loops), `budget_tokens`, non-default sampling parameters, forced `tool_choice`.
+- **Pass:** thinking and planning are left to the model, or controlled by an effort setting rather
+  than prose.
+
+### DP3: No fossils from a retired model
+The highest-yield item on a personal skill library, because both headline shapes were good advice
+two generations ago and are actively harmful now.
+
+- **Fail (update suppressors):** "hold all findings for the final response", "don't narrate", "no
+  interim updates". Written against models that over-narrated. Current models under-narrate with
+  these present.
+- **Fail (anti-formatting rules):** "never use bullets", "no headers", "no bold". Written against
+  models that over-formatted. Current models already under-format, so the rule strips formatting
+  the reader wanted.
+- **Fail (other fossils):** retired model names in the body; model-version workarounds nobody owns;
+  migration-relative phrasing ("X now works differently", "no longer", "also counts") that diffs
+  against a version the model never saw; a cadence reminder repeating an instruction every few
+  turns; rules nothing checks and nobody misses.
+- **Critical exception, do NOT flag:** a prohibition whose failure still reproduces on the target
+  model. The test is whether the failure is current, not whether the sentence looks like a
+  workaround.
+- **Pass:** every mitigation names the model it patched, or the skill carries none.
+- Don't double-penalize: an aspirational rule with no mechanism already fails P3.
+
+### DP4: Outcomes, not choreography
+- **Fail (over-specification):** `STEP 1 / STEP 2` scripts for judgment tasks, where the model's
+  own plan usually beats a hand-written one; runs of three or more prohibition lines where
+  describing success would work; strategy coaching ("it's usually best to") that changes neither
+  what is legal nor how success is measured; grader vocabulary ("you will be graded on", "hidden
+  tests").
+- **Fail (numeric clamps):** interim-update cadences ("post a note every third tool call"), output
+  ceilings ("under 120 words", "at most five bullets"), and cut-the-detail rules. These are one
+  pattern, so remove every limb. A stated operational reason does not convert a clamp into a
+  keeper: re-express the goal as audience and outcome without the number.
+- **Fail (example over-indexing):** a single gold output the model will match for length, tone,
+  and structure; few-shot blocks written for an older model, which freeze that model's behavior
+  into the new one.
+- **Critical exception, do NOT flag:** exact scripts for fragile operations where one sequence is
+  safe, numbered steps where order truly matters, and format-pinning examples on genuinely
+  format-sensitive output, labeled illustrative.
+- **Pass:** outcomes, constraints, and how to verify; numbered steps only where order is real.
+- Don't double-penalize: length *floors* already fail M4. DP4 targets clamps and choreography.
+
+### DP5: The skill has not rotted
+Skill size is a tax paid on every trigger, so this item hits hardest on a preloaded skill. It
+covers the dating shapes specific to skill files, which the S and C items do not ask about.
+
+- **Fail (recency trap):** one session's stumble encoded as a permanent rule. Ask whether the rule
+  would have helped most recent sessions, or only the one that wrote it.
+- **Fail (history narrative):** past tense, incident IDs, PR numbers, dated worked examples, pinned
+  model names. A rule's authority is the behavior it prescribes, not the incident that motivated
+  it, and a pinned model name silently degrades after the next release.
+- **Fail (trigger-case enumeration):** a description that lists near-synonymous example queries and
+  grows one phrase per missed trigger. Descriptions ride in every request, so enumeration taxes
+  every token budget and generalizes worse than named categories of intent. This is the one limit
+  on the trigger-text exemption in DP1: routing text may carry urgency, but not an ever-growing
+  phrase list.
+- **Fail (volatile specifics):** hardcoded paths, flags, version numbers, and API claims with no
+  verification date, where nothing re-checks them.
+- **Pass:** the skill states current rules, points at generalized intent, and its factual claims
+  were verified against current code during the audit.
+- Don't double-penalize: a wall-of-text SKILL.md already fails S2, and stale paths already surface
+  in the drift audit. DP5 scores the dating shapes.
+
+Score DP as one point per applicable item. A skill with no behavioral-instruction body auto-passes
+DP1-DP4, the same way it auto-passes P1-P3. DP5 applies to every skill, since every skill is a
+skill file.
+
 ## Model Fit (up to 4 points, conditional: expect 1-2 to apply on a typical skill)
 
 Does the skill's guidance match the model that reads it? The rest of the checklist scores
@@ -247,11 +361,12 @@ point items:**
 ## Scoring
 
 Point items: S1-S4 (structure), C1-C6 (content), D1-D2 (design), E1 (executability), B1-B2
-(budget), P1-P3 (prompt-attention hygiene, conditional), M1-M4 (model fit, conditional). A
-pure-prose skill that ships no runnable commands auto-passes E1; a skill with no
-behavioral-instruction body auto-passes P1-P3; M items apply only where the skill delegates,
-reviews, or writes a deliverable. C6 (comprehensibility) applies to every skill. Score as a
-fraction of applicable points, then map to the rating band below.
+(budget), P1-P3 (prompt-attention hygiene, conditional), DP1-DP5 (dated prompting, conditional),
+M1-M4 (model fit, conditional). A pure-prose skill that ships no runnable commands auto-passes E1;
+a skill with no behavioral-instruction body auto-passes P1-P3 and DP1-DP4, though DP5 always
+applies; M items apply only where the skill delegates, reviews, or writes a deliverable. C6
+(comprehensibility) applies to every skill. Score as a fraction of applicable points, then map to
+the rating band below.
 
 | Score | Rating |
 |-------|--------|
