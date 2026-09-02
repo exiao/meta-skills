@@ -16,7 +16,7 @@ finding. Those calls look obvious in a grep and are backwards in practice.
 ## Process
 
 1. Read the whole skill directory, every file.
-2. Score the checklist: S1-S4, C1-C6, D1-D2, B1-B2, E1, P1-P3, DP1-DP4, M1-M4. One point each, as
+2. Score the checklist: S1-S4, C1-C6, D1-D2, B1-B2, E1, P1-P3, DP1-DP5, M1-M4. One point each, as
    a fraction of the items that apply.
 3. Write the scorecard. Rank fixes by impact.
 4. Ask before changing anything.
@@ -25,12 +25,14 @@ Three items need a command, not a read:
 
 - **E1**: dry-run the entrypoint (`python -m scripts.<x> --help`) before scoring it.
 - **C5**: `grep -nE "NEVER|DO NOT|don't" SKILL.md references/*.md` for bans with no reason.
-- **DP1-DP4**: run these over the body, then read every hit in context.
+- **DP1-DP5**: run these over the body, then read every hit in context.
   `grep -nE "CRITICAL|IMPORTANT|MUST|ALWAYS|NEVER" SKILL.md` (density, not instances),
   `grep -niE "step by step|<scratchpad>|<thinking>|plan before acting" SKILL.md`,
   `grep -niE "hold (all )?(findings|results)|don't narrate|no interim|never use (bullets|headers|bold)" SKILL.md`,
   `grep -nE "at most [0-9]+|under [0-9]+ words|every [0-9]+ (tool calls|messages)|STEP [0-9]" SKILL.md`,
   `grep -niE "claude-2|claude-3|claude-instant|3\\.5|3\\.7|gpt-4" SKILL.md`.
+  For DP5, `git log -p --follow SKILL.md | grep -c '^+.*description:'` shows a description that
+  only ever grows, and `git blame` dates any rule you cannot otherwise justify.
 - **Reference health**: `python3 ~/.hermes/skills/skills-meta/skill-audit/scripts/check_reference_health.py <skill-dir>`.
   Add `--orphans` for the whole tree. Exits 1 on a dangling pointer, so it can gate a commit.
 

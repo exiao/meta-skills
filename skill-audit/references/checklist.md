@@ -154,13 +154,20 @@ This dimension exists because the rest of the checklist scores structure and nev
 
 Score P as one point per item (3 total) for applicable skills. Don't double-penalize: a redundant *explanation* already flagged under C4 doesn't also cost P2, and a vague untestable term already flagged under C5 doesn't also cost P3. P targets the positional / diluted-instruction / unenforceable shapes specifically.
 
-## Dated Prompting (up to 4 points, conditional: expect 1-3 to apply)
+## Dated Prompting (up to 5 points, conditional: expect 2-4 to apply)
 
 Was this skill written for a model that no longer exists? M items ask whether guidance matches
 the current model's *strengths*. DP items ask whether it still carries workarounds for a previous
 model's *weaknesses*. Every pattern, the keep list, and the confidence rubric are in
 [references/dated-prompting.md](dated-prompting.md), adapted from the `/claude-api prompt-audit`
 skill bundled with Claude Code.
+
+**Two questions decide most DP findings, so ask them before opening the item list.** First: could
+the model already know this? Keep what only the author knows (audience, environment facts, quality
+bar, tool contracts, the reasons behind constraints) and treat restatements of trained defaults as
+removal candidates. Second: which failure, on which model, did this line prevent, and does that
+failure still reproduce? `git blame` answers it where history exists. Both are expanded in the
+reference.
 
 **Score each DP item High, Medium, or Low confidence, and quote the line.** High means documented
 in current model docs or it errors on the target model. Medium means widely observed behavior.
@@ -236,8 +243,30 @@ two generations ago and are actively harmful now.
 - **Pass:** outcomes, constraints, and how to verify; numbered steps only where order is real.
 - Don't double-penalize: length *floors* already fail M4. DP4 targets clamps and choreography.
 
+### DP5: The skill has not rotted
+Skill size is a tax paid on every trigger, so this item hits hardest on a preloaded skill. It
+covers the dating shapes specific to skill files, which the S and C items do not ask about.
+
+- **Fail (recency trap):** one session's stumble encoded as a permanent rule. Ask whether the rule
+  would have helped most recent sessions, or only the one that wrote it.
+- **Fail (history narrative):** past tense, incident IDs, PR numbers, dated worked examples, pinned
+  model names. A rule's authority is the behavior it prescribes, not the incident that motivated
+  it, and a pinned model name silently degrades after the next release.
+- **Fail (trigger-case enumeration):** a description that lists near-synonymous example queries and
+  grows one phrase per missed trigger. Descriptions ride in every request, so enumeration taxes
+  every token budget and generalizes worse than named categories of intent. This is the one limit
+  on the trigger-text exemption in DP1: routing text may carry urgency, but not an ever-growing
+  phrase list.
+- **Fail (volatile specifics):** hardcoded paths, flags, version numbers, and API claims with no
+  verification date, where nothing re-checks them.
+- **Pass:** the skill states current rules, points at generalized intent, and its factual claims
+  were verified against current code during the audit.
+- Don't double-penalize: a wall-of-text SKILL.md already fails S2, and stale paths already surface
+  in the drift audit. DP5 scores the dating shapes.
+
 Score DP as one point per applicable item. A skill with no behavioral-instruction body auto-passes
-DP1-DP4, the same way it auto-passes P1-P3.
+DP1-DP4, the same way it auto-passes P1-P3. DP5 applies to every skill, since every skill is a
+skill file.
 
 ## Model Fit (up to 4 points, conditional: expect 1-2 to apply on a typical skill)
 
@@ -332,11 +361,12 @@ point items:**
 ## Scoring
 
 Point items: S1-S4 (structure), C1-C6 (content), D1-D2 (design), E1 (executability), B1-B2
-(budget), P1-P3 (prompt-attention hygiene, conditional), DP1-DP4 (dated prompting, conditional),
+(budget), P1-P3 (prompt-attention hygiene, conditional), DP1-DP5 (dated prompting, conditional),
 M1-M4 (model fit, conditional). A pure-prose skill that ships no runnable commands auto-passes E1;
-a skill with no behavioral-instruction body auto-passes P1-P3 and DP1-DP4; M items apply only
-where the skill delegates, reviews, or writes a deliverable. C6 (comprehensibility) applies to
-every skill. Score as a fraction of applicable points, then map to the rating band below.
+a skill with no behavioral-instruction body auto-passes P1-P3 and DP1-DP4, though DP5 always
+applies; M items apply only where the skill delegates, reviews, or writes a deliverable. C6
+(comprehensibility) applies to every skill. Score as a fraction of applicable points, then map to
+the rating band below.
 
 | Score | Rating |
 |-------|--------|

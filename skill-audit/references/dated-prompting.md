@@ -16,14 +16,49 @@ specific dated instructions. Never justify a cut by character count.
 
 ## Contents
 
+- [Two questions to ask first](#two-questions-to-ask-first)
 - [DP1: Pressure language](#dp1-pressure-language)
 - [DP2: Superseded scaffolds](#dp2-superseded-scaffolds)
 - [DP3: Fossils](#dp3-fossils)
 - [DP4: Choreography and examples](#dp4-choreography-and-examples)
+- [DP5: Skill-file rot](#dp5-skill-file-rot)
 - [The trigger/behavior split](#the-triggerbehavior-split)
 - [What not to flag](#what-not-to-flag)
 - [Confidence and the flag-versus-fix threshold](#confidence-and-the-flag-versus-fix-threshold)
 - [Verifying a removal](#verifying-a-removal)
+
+## Two questions to ask first
+
+These come before the pattern tables, and they decide most findings on their own.
+
+**1. Could the model already know this?**
+
+- **Keep what only the author knows**: audience and product, environment facts, the quality bar,
+  tool contracts and mechanics, genuinely hard judgment calls, and the *reasons* behind
+  constraints. This is context, and context is never cruft.
+- **Removal candidates**: restatements of trained defaults ("be accurate and helpful"), behavior
+  the model already does unprompted (thoroughness, planning, tool use), and workarounds for
+  failures the target model no longer has.
+
+A sharper form of the same question: is the line a **constraint on behavior** (removal candidate,
+test it) or **context the model cannot get elsewhere** (usually keep)? This is what stops the
+audit becoming a length contest, because a naive shortening pass deletes exactly the
+highest-value words.
+
+**2. Which failure, on which model, did this line prevent, and does that failure still
+reproduce?**
+
+Where git history exists, `git blame` the skill. A line added as a mitigation for a model no
+longer in use is a presumptive removal candidate. A line nobody can justify is suspect by
+default.
+
+Without history, idioms still date a file. `<scratchpad>` and `<brainstorm>` tags, "think step by
+step", assistant-turn prefills, quotes-first extraction scaffolds, and ROLE / CONTEXT / RULES /
+EXAMPLES boilerplate all mark text written for much earlier generations, using techniques that
+are now natively trained or superseded by API features. **Idiom-dating alone is low confidence.**
+It earns medium or high only when paired with a reason grounded in the target model's documented
+behavior, and a blame line tying the text to a retired model's era is the strongest form of that
+pairing.
 
 ## DP1: Pressure language
 
@@ -99,6 +134,16 @@ fails a rule that *has* a mechanism nobody runs. Score one.
 | Grader vocabulary ("you will be graded on", "hidden tests") | Describes the scoring apparatus instead of the requirement, and pushes effort toward being-watched | State every requirement the grader checks. Never describe the grader |
 | Strategy coaching beside task rules ("it's usually best to...") | The author's heuristics are wrong in some situations and the model's plan is usually better | If removing the sentence would not change what is legal or how success is measured, it is strategy. Delete it |
 
+**Prohibition clusters are judged by provenance, one line at a time.** For a run of unconditional
+"never / don't / must not" lines, ask of each: does it carry a stated reason or encode a real
+business or policy constraint? Do not ask whether the model still needs the guardrail, because
+that question keeps everything (nothing is *harmful* to say). Prohibitions encoding observable
+constraints stay: refund caps, data rules, compliance language, promises the business must not
+make. Prohibitions that merely describe undesirable output style with no provenance are cruft:
+banned-phrase lists, tic lists, "don't start with Certainly" written against an older model's
+habits. A surrounding cluster of legitimate reasoned prohibitions does not launder the
+no-provenance ones mixed into it.
+
 **Output-shaping choreography is one pattern, so remove every limb.** Fixed interim-update
 cadences ("after every third tool call, post a progress note"), numeric output ceilings ("under
 120 words", "at most five bullets"), and cut-the-detail instructions are the same over-constraint
@@ -109,6 +154,31 @@ cadence while keeping the ceilings leaves the pattern in place.
 **Overlap with M4.** M4 fails length *floors* ("at least N", "comprehensive") and a missing
 ceiling where an output template exists. DP4 fails numeric *clamps* as over-constraint. A single
 number costs one point, not two.
+
+## DP5: Skill-file rot
+
+Skill files inherit everything above, plus failure modes of their own. **Skill size is a tax paid
+on every trigger**, which is why this group hits hardest on a preloaded skill.
+
+| Pattern | Why it is cruft now | Fix |
+|---|---|---|
+| Verbose SKILL.md explaining what the model already knows | Every paragraph must justify its token cost, and general programming knowledge does not | Apply "could the model already know this?" paragraph by paragraph |
+| Wrong degrees of freedom | Exact scripts over-constrain judgment calls; vague prose under-constrains fragile operations | Match specificity to fragility: prose heuristics for open fields, exact commands only for narrow bridges |
+| **The recency trap**: one session's stumble encoded as a permanent rule | The next session steps around a pothole that is not there | Before keeping a rule, ask whether it would have helped most recent sessions or just the one that wrote it |
+| **Volatile specifics**: hardcoded paths, flags, version numbers, API claims with no verification date | Skills rot factually as code ships, and nothing re-checks them | Encode architecture, data models, and workflows. Verify surviving factual claims against current code as part of the audit |
+| Time-sensitive content ("if before [date]"), option menus, info duplicated across SKILL.md and its references | Dates rot, menus of alternatives dilute, duplicates drift apart | An "old patterns" section instead of dates; one default plus an escape hatch; information in exactly one place |
+| **History narratives**: past tense, incident IDs, PR numbers, pinned model names | A rule's authority is the behavior it prescribes, not the incident that motivated it. Pinned model names silently degrade after the next release | State the current rule and drop the archaeology |
+| **Trigger-case enumeration**: descriptions listing near-synonymous example queries, growing one phrase per missed trigger | Descriptions ride in every request, so enumeration taxes every token budget and generalizes worse than intent categories | Name generalized categories of intent |
+
+**Signals:** a SKILL.md not readable in one sitting; hardcoded paths and version pins; past tense
+in an instruction file; a description that only ever grows in git history.
+
+The last row is the one real limit on the trigger-text exemption below. Routing text may carry
+urgency, but it may not become an ever-growing phrase list.
+
+**Overlap.** A wall-of-text SKILL.md already fails S2, and a hardcoded path already shows up in
+the drift audit. Score DP5 for the *dating* shapes specifically: recency trap, history narrative,
+trigger enumeration, and unverified volatile claims.
 
 ## The trigger/behavior split
 
